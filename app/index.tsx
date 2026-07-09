@@ -1,5 +1,5 @@
-import { Text } from "react-native";
+import { ScreenStub } from "../components/ScreenStub";
 
-export default function Index() {
-  return <Text>Cipher</Text>;
+export default function WelcomeScreen() {
+  return <ScreenStub title="Welcome / Splash" />;
 }
