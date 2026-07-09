@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { colorScheme as nativewindColorScheme } from "nativewind";
 import { colors, ColorTokens } from "./tokens";
 
 export type ThemeModePreference = "light" | "dark" | "system";
@@ -41,6 +42,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const resolvedScheme: "light" | "dark" =
     mode === "system" ? (systemScheme === "dark" ? "dark" : "light") : mode;
+
+  useEffect(() => {
+    nativewindColorScheme.set(mode);
+  }, [mode]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
