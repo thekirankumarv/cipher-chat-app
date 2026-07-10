@@ -13,8 +13,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase/config";
 
-export type MessageType = "text" | "image" | "video" | "file";
-
 export type ReplyPreview = {
   messageId: string;
   senderId: string;
@@ -24,36 +22,18 @@ export type ReplyPreview = {
 export type Message = {
   id: string;
   senderId: string;
-  type: MessageType;
   text: string;
   createdAt: number | null;
-  mediaUrl?: string;
-  mediaName?: string;
-  mediaSize?: number;
-  mediaMime?: string;
   edited?: boolean;
   deleted?: boolean;
   replyTo?: ReplyPreview;
   expiresAt?: number | null;
 };
 
-export type MediaPayload = {
-  kind: "image" | "video" | "file";
-  url: string;
-  name: string;
-  size: number;
-  mime: string;
-};
-
 type RawMessage = {
   senderId: string;
-  type?: MessageType;
   text?: string;
   createdAt: { toMillis: () => number } | null;
-  mediaUrl?: string;
-  mediaName?: string;
-  mediaSize?: number;
-  mediaMime?: string;
   edited?: boolean;
   deleted?: boolean;
   replyTo?: ReplyPreview;
@@ -70,14 +50,6 @@ type MessagesState = {
     senderId: string,
     otherUid: string,
     text: string,
-    replyTo?: ReplyPreview,
-    expiresAt?: number,
-  ) => Promise<void>;
-  sendMediaMessage: (
-    chatId: string,
-    senderId: string,
-    otherUid: string,
-    media: MediaPayload,
     replyTo?: ReplyPreview,
     expiresAt?: number,
   ) => Promise<void>;
@@ -109,13 +81,8 @@ export const useMessages = create<MessagesState>((_set, get) => ({
         return {
           id: d.id,
           senderId: data.senderId,
-          type: data.type ?? "text",
           text: data.text ?? "",
           createdAt: data.createdAt ? data.createdAt.toMillis() : null,
-          mediaUrl: data.mediaUrl,
-          mediaName: data.mediaName,
-          mediaSize: data.mediaSize,
-          mediaMime: data.mediaMime,
           edited: data.edited,
           deleted: data.deleted,
           replyTo: data.replyTo,
@@ -134,30 +101,12 @@ export const useMessages = create<MessagesState>((_set, get) => ({
     if (!trimmed) return;
     await addDoc(collection(db, "chats", chatId, "messages"), {
       senderId,
-      type: "text",
       text: trimmed,
       createdAt: serverTimestamp(),
       ...(replyTo ? { replyTo } : {}),
       ...(expiresAt ? { expiresAt } : {}),
     });
     await bumpChatSummary(chatId, otherUid, trimmed);
-  },
-
-  sendMediaMessage: async (chatId, senderId, otherUid, media, replyTo, expiresAt) => {
-    await addDoc(collection(db, "chats", chatId, "messages"), {
-      senderId,
-      type: media.kind,
-      text: "",
-      mediaUrl: media.url,
-      mediaName: media.name,
-      mediaSize: media.size,
-      mediaMime: media.mime,
-      createdAt: serverTimestamp(),
-      ...(replyTo ? { replyTo } : {}),
-      ...(expiresAt ? { expiresAt } : {}),
-    });
-    const preview = media.kind === "image" ? "Photo" : media.kind === "video" ? "Video" : media.name;
-    await bumpChatSummary(chatId, otherUid, preview);
   },
 
   editMessage: async (chatId, messageId, text) => {
@@ -173,8 +122,6 @@ export const useMessages = create<MessagesState>((_set, get) => ({
     await updateDoc(doc(db, "chats", chatId, "messages", messageId), {
       deleted: true,
       text: "",
-      mediaUrl: null,
-      mediaName: null,
     });
   },
 

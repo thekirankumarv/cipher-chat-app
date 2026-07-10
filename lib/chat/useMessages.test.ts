@@ -51,13 +51,11 @@ describe("useMessages", () => {
     expect(loading).toBe(false);
     expect(messages).toEqual([
       {
-        id: "m1", senderId: "a", type: "text", text: "hi", createdAt: 1000,
-        mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined,
+        id: "m1", senderId: "a", text: "hi", createdAt: 1000,
         edited: undefined, deleted: undefined, replyTo: undefined, expiresAt: null,
       },
       {
-        id: "m2", senderId: "b", type: "text", text: "yo", createdAt: 2000,
-        mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined,
+        id: "m2", senderId: "b", text: "yo", createdAt: 2000,
         edited: undefined, deleted: undefined, replyTo: undefined, expiresAt: null,
       },
     ]);
@@ -69,7 +67,7 @@ describe("useMessages", () => {
 
     expect(addDoc).toHaveBeenCalledTimes(1);
     const [, payload] = (addDoc as jest.Mock).mock.calls[0];
-    expect(payload).toEqual({ senderId: "my-uid", type: "text", text: "hello", createdAt: "mock-timestamp" });
+    expect(payload).toEqual({ senderId: "my-uid", text: "hello", createdAt: "mock-timestamp" });
 
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [, updatePayload] = (updateDoc as jest.Mock).mock.calls[0];
@@ -81,32 +79,6 @@ describe("useMessages", () => {
     await useMessages.getState().sendMessage("chat-1", "my-uid", "other-uid", "   ");
     expect(addDoc).not.toHaveBeenCalled();
     expect(updateDoc).not.toHaveBeenCalled();
-  });
-
-  it("sendMediaMessage writes a media message and a preview into lastMessage", async () => {
-    await useMessages.getState().sendMediaMessage("chat-1", "my-uid", "other-uid", {
-      kind: "image",
-      url: "https://example.com/photo.jpg",
-      name: "photo.jpg",
-      size: 1234,
-      mime: "image/jpeg",
-    });
-
-    expect(addDoc).toHaveBeenCalledTimes(1);
-    const [, payload] = (addDoc as jest.Mock).mock.calls[0];
-    expect(payload).toEqual({
-      senderId: "my-uid",
-      type: "image",
-      text: "",
-      mediaUrl: "https://example.com/photo.jpg",
-      mediaName: "photo.jpg",
-      mediaSize: 1234,
-      mediaMime: "image/jpeg",
-      createdAt: "mock-timestamp",
-    });
-
-    const [, updatePayload] = (updateDoc as jest.Mock).mock.calls[0];
-    expect(updatePayload.lastMessage).toBe("Photo");
   });
 
   it("sendMessage includes replyTo when replying", async () => {
@@ -131,11 +103,11 @@ describe("useMessages", () => {
     expect(updateDoc).not.toHaveBeenCalled();
   });
 
-  it("deleteMessage soft-deletes: clears text/media and sets deleted", async () => {
+  it("deleteMessage soft-deletes: clears text and sets deleted", async () => {
     await useMessages.getState().deleteMessage("chat-1", "m1");
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [, payload] = (updateDoc as jest.Mock).mock.calls[0];
-    expect(payload).toEqual({ deleted: true, text: "", mediaUrl: null, mediaName: null });
+    expect(payload).toEqual({ deleted: true, text: "" });
   });
 
   it("markRead resets the unread count and stamps lastRead for the given uid", async () => {
@@ -161,9 +133,9 @@ describe("useMessages", () => {
   it("pruneExpired hard-deletes only messages past their expiresAt", async () => {
     useMessages.setState({
       messages: [
-        { id: "m1", senderId: "a", type: "text", text: "old", createdAt: 1000, expiresAt: Date.now() - 1000 },
-        { id: "m2", senderId: "b", type: "text", text: "future", createdAt: 2000, expiresAt: Date.now() + 100000 },
-        { id: "m3", senderId: "a", type: "text", text: "no expiry", createdAt: 3000 },
+        { id: "m1", senderId: "a", text: "old", createdAt: 1000, expiresAt: Date.now() - 1000 },
+        { id: "m2", senderId: "b", text: "future", createdAt: 2000, expiresAt: Date.now() + 100000 },
+        { id: "m3", senderId: "a", text: "no expiry", createdAt: 3000 },
       ],
       loading: false,
     });

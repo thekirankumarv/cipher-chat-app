@@ -18,7 +18,6 @@ jest.mock("../lib/chat/useChats", () => ({ useChats: jest.fn() }));
 const mockSubscribe = jest.fn(() => jest.fn());
 const mockChatsSubscribe = jest.fn(() => jest.fn());
 const mockSendMessage = jest.fn().mockResolvedValue(undefined);
-const mockSendMediaMessage = jest.fn().mockResolvedValue(undefined);
 const mockEditMessage = jest.fn().mockResolvedValue(undefined);
 const mockDeleteMessage = jest.fn().mockResolvedValue(undefined);
 const mockMarkRead = jest.fn().mockResolvedValue(undefined);
@@ -26,16 +25,6 @@ jest.mock("../lib/chat/useMessages", () => ({ useMessages: jest.fn() }));
 
 const mockSetStringAsync = jest.fn().mockResolvedValue(undefined);
 jest.mock("expo-clipboard", () => ({ setStringAsync: (...args: any[]) => mockSetStringAsync(...args) }));
-
-const mockPickImageOrVideo = jest.fn();
-const mockPickFile = jest.fn();
-jest.mock("../lib/media/pickMedia", () => ({
-  pickImageOrVideo: () => mockPickImageOrVideo(),
-  pickFile: () => mockPickFile(),
-}));
-
-const mockUploadMedia = jest.fn();
-jest.mock("../lib/media/uploadMedia", () => ({ uploadMedia: (...args: any[]) => mockUploadMedia(...args) }));
 
 const mockSetTyping = jest.fn().mockResolvedValue(undefined);
 const mockSetDisappearing = jest.fn().mockResolvedValue(undefined);
@@ -45,8 +34,6 @@ jest.mock("../lib/presence/useUserPresence", () => ({
   useUserPresence: jest.fn((selector: any) => selector({ byUid: {}, subscribe: mockPresenceSubscribe })),
   formatLastSeen: () => "Offline",
 }));
-
-(globalThis as any).fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve("fake-blob") });
 
 import ChatScreen from "../app/chat/[id]";
 
@@ -77,7 +64,6 @@ describe("ChatScreen", () => {
         ],
         subscribe: mockSubscribe,
         sendMessage: mockSendMessage,
-        sendMediaMessage: mockSendMediaMessage,
         editMessage: mockEditMessage,
         deleteMessage: mockDeleteMessage,
         markRead: mockMarkRead,
@@ -108,7 +94,6 @@ describe("ChatScreen", () => {
         error: "not-found",
         subscribe: mockSubscribe,
         sendMessage: mockSendMessage,
-        sendMediaMessage: mockSendMediaMessage,
         editMessage: mockEditMessage,
         deleteMessage: mockDeleteMessage,
         markRead: mockMarkRead,
@@ -148,72 +133,6 @@ describe("ChatScreen", () => {
     );
     fireEvent.press(await findByTestId("send-button"));
     expect(mockSendMessage).not.toHaveBeenCalled();
-  });
-
-  it("picks, uploads, and sends an image", async () => {
-    mockPickImageOrVideo.mockResolvedValue({
-      uri: "file://photo.jpg",
-      name: "photo.jpg",
-      size: 2048,
-      mime: "image/jpeg",
-      kind: "image",
-    });
-    mockUploadMedia.mockResolvedValue("https://example.com/photo.jpg");
-
-    const { findByTestId } = await render(
-      <ThemeProvider>
-        <ChatScreen />
-      </ThemeProvider>
-    );
-    fireEvent.press(await findByTestId("attach-media"));
-
-    await waitFor(() =>
-      expect(mockSendMediaMessage).toHaveBeenCalledWith(
-        "chat-1", "my-uid", "other-uid",
-        {
-          kind: "image",
-          url: "https://example.com/photo.jpg",
-          name: "photo.jpg",
-          size: 2048,
-          mime: "image/jpeg",
-        },
-        undefined, undefined,
-      ),
-    );
-  });
-
-  it("shows an error and does not send when upload fails", async () => {
-    mockPickFile.mockResolvedValue({
-      uri: "file://doc.pdf",
-      name: "doc.pdf",
-      size: 4096,
-      mime: "application/pdf",
-      kind: "file",
-    });
-    mockUploadMedia.mockRejectedValue(new Error("network down"));
-
-    const { findByTestId, findByText } = await render(
-      <ThemeProvider>
-        <ChatScreen />
-      </ThemeProvider>
-    );
-    fireEvent.press(await findByTestId("attach-file"));
-
-    expect(await findByText("Upload failed. Try again.")).toBeTruthy();
-    expect(mockSendMediaMessage).not.toHaveBeenCalled();
-  });
-
-  it("does nothing when the picker is cancelled", async () => {
-    mockPickImageOrVideo.mockResolvedValue(null);
-    const { findByTestId } = await render(
-      <ThemeProvider>
-        <ChatScreen />
-      </ThemeProvider>
-    );
-    fireEvent.press(await findByTestId("attach-media"));
-    await waitFor(() => expect(mockPickImageOrVideo).toHaveBeenCalledTimes(1));
-    expect(mockUploadMedia).not.toHaveBeenCalled();
-    expect(mockSendMediaMessage).not.toHaveBeenCalled();
   });
 
   it("shows reply/copy/edit/delete actions for my own message and replies to it", async () => {
@@ -302,7 +221,6 @@ describe("ChatScreen", () => {
         ],
         subscribe: mockSubscribe,
         sendMessage: mockSendMessage,
-        sendMediaMessage: mockSendMediaMessage,
         editMessage: mockEditMessage,
         deleteMessage: mockDeleteMessage,
         markRead: mockMarkRead,
@@ -430,7 +348,6 @@ describe("ChatScreen", () => {
         ],
         subscribe: mockSubscribe,
         sendMessage: mockSendMessage,
-        sendMediaMessage: mockSendMediaMessage,
         editMessage: mockEditMessage,
         deleteMessage: mockDeleteMessage,
         markRead: mockMarkRead,

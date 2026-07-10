@@ -28,7 +28,7 @@ export default function SearchScreen() {
 
   const trimmed = query.trim().toLowerCase();
   const results = trimmed
-    ? messages.filter((m) => m.type === "text" && !m.deleted && m.text.toLowerCase().includes(trimmed))
+    ? messages.filter((m) => !m.deleted && m.text.toLowerCase().includes(trimmed))
     : [];
 
   return (

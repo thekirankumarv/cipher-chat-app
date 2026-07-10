@@ -24,7 +24,6 @@ authenticates as a **Web app** in the Firebase console:
 EXPO_PUBLIC_FIREBASE_API_KEY=<apiKey>
 EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=<authDomain>
 EXPO_PUBLIC_FIREBASE_PROJECT_ID=<projectId>
-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=<storageBucket>
 EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<messagingSenderId>
 EXPO_PUBLIC_FIREBASE_APP_ID=<appId>
 ```
@@ -64,17 +63,7 @@ disappearing messages still vanish from everyone's screen on schedule via
 client-side filtering — it just means expired docs pile up in Firestore
 until the rule is live.
 
-## 6. Enable Storage (needed for Phase 5 media sharing)
-
-1. Go to **Build → Storage → Get started**.
-2. Pick the same region you used for Firestore, production mode.
-3. Deploy `storage.rules` (repo root) the same way as step 5 — paste into
-   **Storage → Rules** and Publish, or `firebase deploy --only storage`.
-
-Without this, image/video/file sharing in chat will fail on send — text
-messaging and everything from Phases 1-4 work regardless.
-
-## 7. Run the app
+## 6. Run the app
 
 ```bash
 npm start

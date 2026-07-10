@@ -5,8 +5,6 @@ import {
   TextInput,
   Pressable,
   FlatList,
-  Image,
-  Linking,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -19,20 +17,8 @@ import { useChats, type DisappearingDuration } from "../../lib/chat/useChats";
 import { useMessages, type Message, type ReplyPreview } from "../../lib/chat/useMessages";
 import { useUserPresence, formatLastSeen } from "../../lib/presence/useUserPresence";
 import { Avatar } from "../../components/Avatar";
-import { pickImageOrVideo, pickFile } from "../../lib/media/pickMedia";
-import { uploadMedia } from "../../lib/media/uploadMedia";
-
-function formatSize(bytes?: number) {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function previewFor(message: Message): string {
-  if (message.type === "image") return "Photo";
-  if (message.type === "video") return "Video";
-  if (message.type === "file") return message.mediaName ?? "File";
   return message.text;
 }
 
@@ -57,15 +43,12 @@ export default function ChatScreen() {
   const messagesError = useMessages((s) => s.error);
   const subscribe = useMessages((s) => s.subscribe);
   const sendMessage = useMessages((s) => s.sendMessage);
-  const sendMediaMessage = useMessages((s) => s.sendMediaMessage);
   const editMessage = useMessages((s) => s.editMessage);
   const deleteMessage = useMessages((s) => s.deleteMessage);
   const markRead = useMessages((s) => s.markRead);
   const pruneExpired = useMessages((s) => s.pruneExpired);
 
   const [draft, setDraft] = useState("");
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyPreview | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -159,30 +142,6 @@ export default function ChatScreen() {
     setDraft("");
     setReplyTarget(null);
     sendMessage(id, uid, chatMeta.otherUid, text, reply, expiresAt);
-  };
-
-  const handleAttach = async (kind: "media" | "file") => {
-    if (!uid || !id || !chatMeta) return;
-    setUploadError(null);
-    const picked = kind === "media" ? await pickImageOrVideo() : await pickFile();
-    if (!picked) return;
-
-    setUploadProgress(0);
-    try {
-      const response = await fetch(picked.uri);
-      const blob = await response.blob();
-      const url = await uploadMedia(id, picked.name, blob, setUploadProgress);
-      const reply = replyTarget ?? undefined;
-      const duration = chatMeta.disappearingDuration;
-      const expiresAt = duration !== "off" ? Date.now() + DISAPPEARING_MS[duration] : undefined;
-      setReplyTarget(null);
-      const media = { kind: picked.kind, url, name: picked.name, size: picked.size, mime: picked.mime };
-      await sendMediaMessage(id, uid, chatMeta.otherUid, media, reply, expiresAt);
-    } catch {
-      setUploadError("Upload failed. Try again.");
-    } finally {
-      setUploadProgress(null);
-    }
   };
 
   const startReply = (item: Message) => {
@@ -389,12 +348,10 @@ export default function ChatScreen() {
               <Pressable testID={`action-reply-${item.id}`} onPress={() => startReply(item)}>
                 <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>Reply</Text>
               </Pressable>
-              {item.type === "text" ? (
-                <Pressable testID={`action-copy-${item.id}`} onPress={() => handleCopy(item)}>
-                  <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>Copy</Text>
-                </Pressable>
-              ) : null}
-              {mine && item.type === "text" ? (
+              <Pressable testID={`action-copy-${item.id}`} onPress={() => handleCopy(item)}>
+                <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>Copy</Text>
+              </Pressable>
+              {mine ? (
                 <Pressable testID={`action-edit-${item.id}`} onPress={() => startEdit(item)}>
                   <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>Edit</Text>
                 </Pressable>
@@ -406,72 +363,6 @@ export default function ChatScreen() {
               ) : null}
             </View>
           ) : null;
-
-          if (item.type === "image") {
-            return (
-              <View>
-                <Pressable
-                  testID={`message-${item.id}`}
-                  onPress={() => setSelectedId(isSelected ? null : item.id)}
-                  onLongPress={() => setSelectedId(item.id)}
-                  style={[bubbleStyle, { padding: spacing.xs, overflow: "hidden" }]}
-                >
-                  {replyBanner}
-                  <Image
-                    testID={`message-image-${item.id}`}
-                    source={{ uri: item.mediaUrl }}
-                    style={{ width: 220, height: 220, borderRadius: radii.card }}
-                    resizeMode="cover"
-                  />
-                </Pressable>
-                {isSelected ? (
-                  <View style={{ alignSelf: mine ? "flex-end" : "flex-start", marginBottom: spacing.xs }}>
-                    <Pressable
-                      testID={`action-open-${item.id}`}
-                      onPress={() => item.mediaUrl && Linking.openURL(item.mediaUrl)}
-                    >
-                      <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>Open</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-                {statusLine}
-                {actionRow}
-              </View>
-            );
-          }
-
-          if (item.type === "video" || item.type === "file") {
-            return (
-              <View>
-                <Pressable
-                  testID={`message-${item.id}`}
-                  onPress={() => setSelectedId(isSelected ? null : item.id)}
-                  onLongPress={() => setSelectedId(item.id)}
-                  style={[bubbleStyle, { paddingVertical: spacing.sm, paddingHorizontal: spacing.md }]}
-                >
-                  {replyBanner}
-                  <Text style={{ color: textColor, fontWeight: "700" }}>
-                    {item.type === "video" ? "Video" : item.mediaName}
-                  </Text>
-                  <Text style={{ color: textColor, opacity: 0.8, fontSize: typeScale.meta.fontSize, marginTop: 2 }}>
-                    {formatSize(item.mediaSize)} · tap to select, then Open
-                  </Text>
-                </Pressable>
-                {isSelected ? (
-                  <View style={{ alignSelf: mine ? "flex-end" : "flex-start", marginBottom: spacing.xs }}>
-                    <Pressable
-                      testID={`action-open-${item.id}`}
-                      onPress={() => item.mediaUrl && Linking.openURL(item.mediaUrl)}
-                    >
-                      <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>Open</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-                {statusLine}
-                {actionRow}
-              </View>
-            );
-          }
 
           return (
             <View>
@@ -495,20 +386,6 @@ export default function ChatScreen() {
           );
         }}
       />
-
-      {uploadProgress !== null ? (
-        <Text
-          testID="upload-progress"
-          style={{ color: colors.textSecondary, textAlign: "center", paddingBottom: spacing.xs }}
-        >
-          Uploading… {Math.round(uploadProgress * 100)}%
-        </Text>
-      ) : null}
-      {uploadError ? (
-        <Text testID="upload-error" style={{ color: colors.danger, textAlign: "center", paddingBottom: spacing.xs }}>
-          {uploadError}
-        </Text>
-      ) : null}
 
       {replyTarget ? (
         <View
@@ -565,12 +442,6 @@ export default function ChatScreen() {
           borderTopColor: colors.border,
         }}
       >
-        <Pressable testID="attach-media" onPress={() => handleAttach("media")} style={{ marginRight: spacing.sm }}>
-          <Text style={{ color: colors.accent, fontWeight: "700" }}>Photo</Text>
-        </Pressable>
-        <Pressable testID="attach-file" onPress={() => handleAttach("file")} style={{ marginRight: spacing.sm }}>
-          <Text style={{ color: colors.accent, fontWeight: "700" }}>File</Text>
-        </Pressable>
         <TextInput
           testID="message-input"
           value={draft}
