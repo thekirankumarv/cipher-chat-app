@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   doc,
   getDoc,
@@ -18,12 +19,32 @@ type InviteState = {
 
 const EXPIRY_MS = 24 * 60 * 60 * 1000;
 
+// auth.currentUser can be momentarily null right after a page load/reload —
+// Firebase Auth restores the persisted session asynchronously. Waiting for
+// onAuthStateChanged's first callback (which fires immediately with the
+// current value once resolved) avoids a race where a signed-in user's first
+// action after reload throws "before sign-in resolved a uid".
+function resolveUid(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (auth.currentUser) {
+      resolve(auth.currentUser.uid);
+      return;
+    }
+    let unsubscribe: (() => void) | undefined;
+    unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe?.();
+      if (user) {
+        resolve(user.uid);
+      } else {
+        reject(new Error("not-signed-in"));
+      }
+    });
+  });
+}
+
 export const useInvite = create<InviteState>(() => ({
   createInvite: async () => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) {
-      throw new Error("createInvite called before sign-in resolved a uid");
-    }
+    const uid = await resolveUid();
     const code = generateInviteCode();
     await setDoc(doc(db, "invites", code), {
       createdBy: uid,
@@ -40,10 +61,7 @@ export const useInvite = create<InviteState>(() => ({
   },
 
   redeemInvite: async (code: string) => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) {
-      throw new Error("redeemInvite called before sign-in resolved a uid");
-    }
+    const uid = await resolveUid();
     const inviteRef = doc(db, "invites", code);
     const snap = await getDoc(inviteRef);
     if (!snap.exists()) {

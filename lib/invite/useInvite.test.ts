@@ -2,6 +2,10 @@ import { act } from "@testing-library/react-native";
 
 jest.mock("../firebase/config", () => ({ auth: { currentUser: { uid: "my-uid" } }, db: {} }));
 
+jest.mock("firebase/auth", () => ({
+  onAuthStateChanged: jest.fn(),
+}));
+
 jest.mock("firebase/firestore", () => ({
   doc: jest.fn((_db, col, id) => ({ id, col })),
   getDoc: jest.fn(),
@@ -13,11 +17,16 @@ jest.mock("firebase/firestore", () => ({
   Timestamp: { now: jest.fn(() => ({ toMillis: () => 1000 })) },
 }));
 
+import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, addDoc } from "firebase/firestore";
+import { auth } from "../firebase/config";
 import { useInvite } from "./useInvite";
 
 describe("useInvite", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (auth as { currentUser: { uid: string } | null }).currentUser = { uid: "my-uid" };
+  });
 
   it("createInvite writes an invites doc and returns the code", async () => {
     (setDoc as jest.Mock).mockResolvedValue(undefined);
@@ -83,5 +92,24 @@ describe("useInvite", () => {
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [, updatePayload] = (updateDoc as jest.Mock).mock.calls[0];
     expect(updatePayload.used).toBe(true);
+  });
+
+  it("waits for onAuthStateChanged when currentUser isn't resolved yet on mount", async () => {
+    (auth as { currentUser: { uid: string } | null }).currentUser = null;
+    (onAuthStateChanged as jest.Mock).mockImplementation((_auth, callback) => {
+      callback({ uid: "late-uid" });
+      return jest.fn();
+    });
+    (setDoc as jest.Mock).mockResolvedValue(undefined);
+
+    let code = "";
+    await act(async () => {
+      code = await useInvite.getState().createInvite();
+    });
+
+    expect(onAuthStateChanged).toHaveBeenCalledTimes(1);
+    const [, payload] = (setDoc as jest.Mock).mock.calls[0];
+    expect(payload.createdBy).toBe("late-uid");
+    expect(code).toBeTruthy();
   });
 });
