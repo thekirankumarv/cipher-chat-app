@@ -1,7 +1,6 @@
 import React from "react";
 import { render } from "@testing-library/react-native";
 import { ThemeProvider } from "../lib/theme/ThemeProvider";
-import WelcomeScreen from "../app/index";
 import CreateIdentityScreen from "../app/create-identity";
 import HomeScreen from "../app/home";
 import ConnectScreen from "../app/connect";
@@ -12,7 +11,6 @@ import SettingsScreen from "../app/settings";
 import SearchScreen from "../app/search";
 
 const screens: Array<[string, React.ComponentType, string]> = [
-  ["Welcome", WelcomeScreen, "Welcome / Splash"],
   ["CreateIdentity", CreateIdentityScreen, "Create Identity"],
   ["Home", HomeScreen, "Home / Chat List"],
   ["Connect", ConnectScreen, "Connect Sheet"],
