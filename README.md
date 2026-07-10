@@ -1,56 +1,155 @@
-# Welcome to your Expo app 👋
+# Cipher
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Private, anonymous 1-to-1 chat for a closed friend group (max ~10 people).
+No email, phone, name, or password ever collected — identity is a
+generated User ID + procedural avatar, tied to an anonymous Firebase auth
+session. Built with Expo (React Native + TypeScript) and Firebase
+(Anonymous Auth + Firestore).
 
-## Get started
+Features: connect via QR/shareable code, real-time messaging, typing
+indicators, read receipts, presence (online/last seen), reply/edit/delete,
+disappearing messages, in-chat search, light/dark theme, and full identity
+reset.
 
-1. Install dependencies
+## Setup
 
-   ```bash
-   npm install
-   ```
+### 1. Create a Firebase project
 
-2. Start the app
+1. Go to https://console.firebase.google.com and create a project (any
+   name). You don't need Google Analytics.
+2. Click the Web icon (`</>`) to register a **Web app** — the Firebase JS
+   SDK authenticates as a Web app even though this is a mobile app.
+3. Copy the `firebaseConfig` values Firebase shows you.
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 2. Configure env vars
 
 ```bash
-npm run reset-project
+cp .env.example .env
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Fill in `.env` with the values from step 1:
 
-### Other setup steps
+```
+EXPO_PUBLIC_FIREBASE_API_KEY=<apiKey>
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=<authDomain>
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=<projectId>
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<messagingSenderId>
+EXPO_PUBLIC_FIREBASE_APP_ID=<appId>
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+`.env` is gitignored — never commit it.
 
-## Learn more
+### 3. Enable Anonymous Authentication
 
-To learn more about developing your project with Expo, look at the following resources:
+Firebase console → **Build → Authentication → Sign-in method** → enable
+**Anonymous**.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 4. Create a Firestore database
 
-## Join the community
+Firebase console → **Build → Firestore Database → Create database** →
+**Production mode** → pick any region.
 
-Join our community of developers creating universal apps.
+### 5. Deploy the security rules
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Rules live in `firestore.rules` at the repo root. Deploy via the console
+(**Firestore Database → Rules**, paste, Publish) or the CLI
+(`firebase deploy --only firestore:rules`, requires `firebase init` once
+to link this repo to your project).
+
+**Re-deploy whenever `firestore.rules` changes** — the console-paste route
+isn't automatic.
+
+### 6. Install and run
+
+```bash
+npm install
+npm start
+```
+
+On first launch the app signs in anonymously and generates a display ID +
+avatar you can confirm or shuffle before it creates your `users/{uid}`
+document.
+
+## Testing
+
+```bash
+npx tsc --noEmit   # typecheck
+npm test           # jest
+```
+
+## Using the app
+
+- **Connect with someone:** tap **+ Connect** on Home, share your code/QR
+  with a friend (out of band — text, in person, etc.), they enter it or
+  scan it. Once both sides connect, a chat opens.
+- **Chat:** tap a connection to open it. Long-press a message for
+  reply/copy/edit/delete. Toggle disappearing messages (24h/7d) from the
+  chat header.
+- **Settings:** theme switch, reset identity (wipes your local session and
+  generates a brand-new anonymous identity — irreversible, old chats
+  become unreachable).
+
+## Building an APK (Android)
+
+This project uses [EAS Build](https://docs.expo.dev/build/introduction/),
+Expo's cloud build service — no local Android SDK needed.
+
+### 1. Install and log in
+
+```bash
+npm install -g eas-cli
+eas login
+```
+
+(Free Expo account — sign up at https://expo.dev/signup if you don't have
+one.)
+
+### 2. Configure the build
+
+```bash
+eas build:configure
+```
+
+This creates `eas.json`. Add an APK-producing profile (AAB is the default,
+but AAB can't be sideloaded — you want an APK for direct install):
+
+```json
+{
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  }
+}
+```
+
+### 3. Build
+
+```bash
+eas build -p android --profile preview
+```
+
+This uploads your project to Expo's build servers and returns a download
+link (also viewable at https://expo.dev under your project) once done —
+typically a few minutes.
+
+### 4. Install on your phone
+
+Download the `.apk` from the link EAS gives you, transfer it to an
+Android device (or open the link directly on the phone), and install it.
+You'll need to allow "install from unknown sources" for your browser/file
+manager the first time.
+
+Each friend in the group installs the same APK — since there's no app
+store distribution, share the `.apk` file or the EAS download link
+directly with them.
+
+## Notes
+
+- Text-only: no media/file sharing (Firebase Storage requires the Blaze
+  billing plan; this project intentionally stays on Firebase's free Spark
+  tier).
+- Built for a closed group of ~10 people. No user discovery — you can only
+  chat with someone you've explicitly connected with via a shared code.
