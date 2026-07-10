@@ -1,0 +1,98 @@
+import { act } from "@testing-library/react-native";
+
+jest.mock("../firebase/config", () => ({
+  auth: { currentUser: null },
+  db: {},
+}));
+
+jest.mock("firebase/auth", () => ({
+  signInAnonymously: jest.fn(),
+}));
+
+jest.mock("firebase/firestore", () => ({
+  doc: jest.fn(() => ({ id: "mock-doc-ref" })),
+  getDoc: jest.fn(),
+  setDoc: jest.fn(),
+  serverTimestamp: jest.fn(() => "mock-timestamp"),
+}));
+
+import { signInAnonymously } from "firebase/auth";
+import { getDoc, setDoc } from "firebase/firestore";
+import { useIdentity } from "./useIdentity";
+
+describe("useIdentity", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useIdentity.setState({
+      status: "bootstrapping",
+      uid: null,
+      displayId: null,
+      avatarSeed: null,
+      draftDisplayId: "quiet-falcon-42",
+      draftAvatarSeed: "seedseedseed1234",
+    });
+  });
+
+  it("shuffleDraft replaces both draft values", () => {
+    const before = useIdentity.getState();
+    act(() => {
+      useIdentity.getState().shuffleDraft();
+    });
+    const after = useIdentity.getState();
+    expect(after.draftDisplayId).not.toEqual(before.draftDisplayId);
+    expect(after.draftAvatarSeed).not.toEqual(before.draftAvatarSeed);
+  });
+
+  it("bootstrap signs in anonymously and sets needs-identity when no user doc exists", async () => {
+    (signInAnonymously as jest.Mock).mockResolvedValue({ user: { uid: "uid-1" } });
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
+
+    await act(async () => {
+      await useIdentity.getState().bootstrap();
+    });
+
+    expect(signInAnonymously).toHaveBeenCalledTimes(1);
+    expect(useIdentity.getState().status).toBe("needs-identity");
+    expect(useIdentity.getState().uid).toBe("uid-1");
+  });
+
+  it("bootstrap loads an existing identity and sets ready when a user doc exists", async () => {
+    (signInAnonymously as jest.Mock).mockResolvedValue({ user: { uid: "uid-2" } });
+    (getDoc as jest.Mock).mockResolvedValue({
+      exists: () => true,
+      data: () => ({ displayId: "amber-otter-7", avatarSeed: "existingseed0001" }),
+    });
+
+    await act(async () => {
+      await useIdentity.getState().bootstrap();
+    });
+
+    const state = useIdentity.getState();
+    expect(state.status).toBe("ready");
+    expect(state.displayId).toBe("amber-otter-7");
+    expect(state.avatarSeed).toBe("existingseed0001");
+  });
+
+  it("confirmIdentity writes the draft identity to Firestore and sets ready", async () => {
+    useIdentity.setState({ uid: "uid-3" });
+
+    await act(async () => {
+      await useIdentity.getState().confirmIdentity();
+    });
+
+    expect(setDoc).toHaveBeenCalledTimes(1);
+    const [, payload] = (setDoc as jest.Mock).mock.calls[0];
+    expect(payload.displayId).toBe("quiet-falcon-42");
+    expect(payload.avatarSeed).toBe("seedseedseed1234");
+    const state = useIdentity.getState();
+    expect(state.status).toBe("ready");
+    expect(state.displayId).toBe("quiet-falcon-42");
+  });
+
+  it("confirmIdentity throws if called before a uid exists", async () => {
+    useIdentity.setState({ uid: null });
+    await expect(useIdentity.getState().confirmIdentity()).rejects.toThrow(
+      "confirmIdentity called before bootstrap resolved a uid"
+    );
+  });
+});
