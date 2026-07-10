@@ -6,6 +6,7 @@ import {
   onSnapshot,
   addDoc,
   doc,
+  deleteDoc,
   updateDoc,
   serverTimestamp,
   increment,
@@ -33,6 +34,7 @@ export type Message = {
   edited?: boolean;
   deleted?: boolean;
   replyTo?: ReplyPreview;
+  expiresAt?: number | null;
 };
 
 export type MediaPayload = {
@@ -55,6 +57,7 @@ type RawMessage = {
   edited?: boolean;
   deleted?: boolean;
   replyTo?: ReplyPreview;
+  expiresAt?: number | null;
 };
 
 type MessagesState = {
@@ -67,6 +70,7 @@ type MessagesState = {
     otherUid: string,
     text: string,
     replyTo?: ReplyPreview,
+    expiresAt?: number,
   ) => Promise<void>;
   sendMediaMessage: (
     chatId: string,
@@ -74,10 +78,12 @@ type MessagesState = {
     otherUid: string,
     media: MediaPayload,
     replyTo?: ReplyPreview,
+    expiresAt?: number,
   ) => Promise<void>;
   editMessage: (chatId: string, messageId: string, text: string) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   markRead: (chatId: string, uid: string) => Promise<void>;
+  pruneExpired: (chatId: string) => Promise<void>;
 };
 
 async function bumpChatSummary(chatId: string, otherUid: string, preview: string) {
@@ -88,7 +94,7 @@ async function bumpChatSummary(chatId: string, otherUid: string, preview: string
   });
 }
 
-export const useMessages = create<MessagesState>(() => ({
+export const useMessages = create<MessagesState>((_set, get) => ({
   messages: [],
   loading: true,
 
@@ -111,6 +117,7 @@ export const useMessages = create<MessagesState>(() => ({
           edited: data.edited,
           deleted: data.deleted,
           replyTo: data.replyTo,
+          expiresAt: data.expiresAt ?? null,
         };
       });
       useMessages.setState({ messages, loading: false });
@@ -118,7 +125,7 @@ export const useMessages = create<MessagesState>(() => ({
     return unsubscribe;
   },
 
-  sendMessage: async (chatId, senderId, otherUid, text, replyTo) => {
+  sendMessage: async (chatId, senderId, otherUid, text, replyTo, expiresAt) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     await addDoc(collection(db, "chats", chatId, "messages"), {
@@ -127,11 +134,12 @@ export const useMessages = create<MessagesState>(() => ({
       text: trimmed,
       createdAt: serverTimestamp(),
       ...(replyTo ? { replyTo } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
     });
     await bumpChatSummary(chatId, otherUid, trimmed);
   },
 
-  sendMediaMessage: async (chatId, senderId, otherUid, media, replyTo) => {
+  sendMediaMessage: async (chatId, senderId, otherUid, media, replyTo, expiresAt) => {
     await addDoc(collection(db, "chats", chatId, "messages"), {
       senderId,
       type: media.kind,
@@ -142,6 +150,7 @@ export const useMessages = create<MessagesState>(() => ({
       mediaMime: media.mime,
       createdAt: serverTimestamp(),
       ...(replyTo ? { replyTo } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
     });
     const preview = media.kind === "image" ? "Photo" : media.kind === "video" ? "Video" : media.name;
     await bumpChatSummary(chatId, otherUid, preview);
@@ -170,5 +179,17 @@ export const useMessages = create<MessagesState>(() => ({
       [`unreadCount.${uid}`]: 0,
       [`lastRead.${uid}`]: serverTimestamp(),
     });
+  },
+
+  // Client-side expiry filtering is what actually hides disappearing
+  // messages (see ChatScreen); this just keeps Firestore from accumulating
+  // expired docs forever. Best-effort — failures are silently ignored since
+  // any participant's next visit will retry.
+  pruneExpired: async (chatId) => {
+    const now = Date.now();
+    const expired = get().messages.filter((m) => m.expiresAt && m.expiresAt < now);
+    await Promise.all(
+      expired.map((m) => deleteDoc(doc(db, "chats", chatId, "messages", m.id)).catch(() => {})),
+    );
   },
 }));

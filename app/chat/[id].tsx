@@ -15,7 +15,7 @@ import * as Clipboard from "expo-clipboard";
 import { useTheme } from "../../lib/theme/ThemeProvider";
 import { spacing, radii, typeScale } from "../../lib/theme/tokens";
 import { useIdentity } from "../../lib/identity/useIdentity";
-import { useChats } from "../../lib/chat/useChats";
+import { useChats, type DisappearingDuration } from "../../lib/chat/useChats";
 import { useMessages, type Message, type ReplyPreview } from "../../lib/chat/useMessages";
 import { useUserPresence, formatLastSeen } from "../../lib/presence/useUserPresence";
 import { Avatar } from "../../components/Avatar";
@@ -36,6 +36,11 @@ function previewFor(message: Message): string {
   return message.text;
 }
 
+const DISAPPEARING_MS: Record<Exclude<DisappearingDuration, "off">, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+};
+
 export default function ChatScreen() {
   const { id: rawId } = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
@@ -45,6 +50,7 @@ export default function ChatScreen() {
   const chatMeta = useChats((s) => s.chats.find((c) => c.id === id));
   const chatsSubscribe = useChats((s) => s.subscribe);
   const setTyping = useChats((s) => s.setTyping);
+  const setDisappearing = useChats((s) => s.setDisappearing);
   const presenceByUid = useUserPresence((s) => s.byUid);
   const presenceSubscribe = useUserPresence((s) => s.subscribe);
   const messages = useMessages((s) => s.messages);
@@ -54,6 +60,7 @@ export default function ChatScreen() {
   const editMessage = useMessages((s) => s.editMessage);
   const deleteMessage = useMessages((s) => s.deleteMessage);
   const markRead = useMessages((s) => s.markRead);
+  const pruneExpired = useMessages((s) => s.pruneExpired);
 
   const [draft, setDraft] = useState("");
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -61,6 +68,8 @@ export default function ChatScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyPreview | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [showDisappearingMenu, setShowDisappearingMenu] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -83,6 +92,19 @@ export default function ChatScreen() {
   useEffect(() => {
     if (uid && id) markRead(id, uid);
   }, [uid, id, messages.length, markRead]);
+
+  // Disappearing messages: no server-side trigger deletes them at exactly
+  // the right moment, so a client tick re-filters what's visible (hiding
+  // expired ones instantly for anyone with the chat open) and opportunistically
+  // hard-deletes them so they don't linger in Firestore forever.
+  useEffect(() => {
+    if (!id) return;
+    const tick = setInterval(() => {
+      setNow(Date.now());
+      pruneExpired(id);
+    }, 15000);
+    return () => clearInterval(tick);
+  }, [id, pruneExpired]);
 
   useEffect(() => {
     if (!chatMeta?.otherUid) return;
@@ -123,13 +145,11 @@ export default function ChatScreen() {
 
     const text = draft;
     const reply = replyTarget ?? undefined;
+    const duration = chatMeta.disappearingDuration;
+    const expiresAt = duration !== "off" ? Date.now() + DISAPPEARING_MS[duration] : undefined;
     setDraft("");
     setReplyTarget(null);
-    if (reply) {
-      sendMessage(id, uid, chatMeta.otherUid, text, reply);
-    } else {
-      sendMessage(id, uid, chatMeta.otherUid, text);
-    }
+    sendMessage(id, uid, chatMeta.otherUid, text, reply, expiresAt);
   };
 
   const handleAttach = async (kind: "media" | "file") => {
@@ -144,13 +164,11 @@ export default function ChatScreen() {
       const blob = await response.blob();
       const url = await uploadMedia(id, picked.name, blob, setUploadProgress);
       const reply = replyTarget ?? undefined;
+      const duration = chatMeta.disappearingDuration;
+      const expiresAt = duration !== "off" ? Date.now() + DISAPPEARING_MS[duration] : undefined;
       setReplyTarget(null);
       const media = { kind: picked.kind, url, name: picked.name, size: picked.size, mime: picked.mime };
-      if (reply) {
-        await sendMediaMessage(id, uid, chatMeta.otherUid, media, reply);
-      } else {
-        await sendMediaMessage(id, uid, chatMeta.otherUid, media);
-      }
+      await sendMediaMessage(id, uid, chatMeta.otherUid, media, reply, expiresAt);
     } catch {
       setUploadError("Upload failed. Try again.");
     } finally {
@@ -183,7 +201,8 @@ export default function ChatScreen() {
     await deleteMessage(id, item.id);
   };
 
-  const lastMineMessage = [...messages].reverse().find((m) => m.senderId === uid && !m.deleted);
+  const visibleMessages = messages.filter((m) => !m.expiresAt || m.expiresAt > now);
+  const lastMineMessage = [...visibleMessages].reverse().find((m) => m.senderId === uid && !m.deleted);
 
   return (
     <KeyboardAvoidingView
@@ -223,12 +242,55 @@ export default function ChatScreen() {
                   : ""}
           </Text>
         </View>
+        <View style={{ flex: 1 }} />
+        <Pressable testID="disappearing-toggle" onPress={() => setShowDisappearingMenu((v) => !v)}>
+          <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>
+            {chatMeta?.disappearingDuration === "off" || !chatMeta?.disappearingDuration
+              ? "Disappearing: Off"
+              : `Disappearing: ${chatMeta.disappearingDuration}`}
+          </Text>
+        </Pressable>
       </View>
+
+      {showDisappearingMenu ? (
+        <View
+          testID="disappearing-menu"
+          style={{
+            flexDirection: "row",
+            justifyContent: "flex-end",
+            gap: spacing.md,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.sm,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          }}
+        >
+          {(["off", "24h", "7d"] as const).map((duration) => (
+            <Pressable
+              key={duration}
+              testID={`disappearing-${duration}`}
+              onPress={() => {
+                if (id) setDisappearing(id, duration);
+                setShowDisappearingMenu(false);
+              }}
+            >
+              <Text
+                style={{
+                  color: chatMeta?.disappearingDuration === duration ? colors.accent : colors.textSecondary,
+                  fontWeight: chatMeta?.disappearingDuration === duration ? "700" : "400",
+                }}
+              >
+                {duration === "off" ? "Off" : duration}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       <FlatList
         testID="message-list"
         ref={listRef}
-        data={messages}
+        data={visibleMessages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.lg }}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}

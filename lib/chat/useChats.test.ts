@@ -58,6 +58,7 @@ describe("useChats", () => {
               unreadCount: { "my-uid": 0, "other-2": 0 },
               typing: { "other-2": true },
               lastRead: { "other-2": { toMillis: () => 1500 } },
+              disappearingDuration: "24h",
             },
           },
         ]),
@@ -70,14 +71,21 @@ describe("useChats", () => {
     expect(chats[0].otherDisplayId).toBe("friend-other-2");
     expect(chats[0].otherTyping).toBe(true);
     expect(chats[0].otherLastRead).toBe(1500);
+    expect(chats[0].disappearingDuration).toBe("24h");
     expect(chats[1].unreadCount).toBe(2);
     expect(chats[1].otherTyping).toBe(false);
     expect(chats[1].otherLastRead).toBeNull();
+    expect(chats[1].disappearingDuration).toBe("off");
     unsubscribe();
   });
 
   it("setTyping updates the chat doc's typing map for the given uid", async () => {
     await useChats.getState().setTyping("chat-1", "my-uid", true);
     expect(updateDoc).toHaveBeenCalledWith({ id: "chat-1", col: "chats" }, { "typing.my-uid": true });
+  });
+
+  it("setDisappearing updates the chat doc's duration", async () => {
+    await useChats.getState().setDisappearing("chat-1", "7d");
+    expect(updateDoc).toHaveBeenCalledWith({ id: "chat-1", col: "chats" }, { disappearingDuration: "7d" });
   });
 });

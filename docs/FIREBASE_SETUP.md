@@ -54,6 +54,16 @@ The rules that scope reads/writes to your own data are already written in
   in): `firebase deploy --only firestore:rules` (requires running
   `firebase init` once to link this repo to your project first).
 
+**Re-deploy whenever `firestore.rules` changes.** The console-paste route
+isn't automatic — pushing a new commit that edits this file does nothing to
+the live project until you paste it again. Phase 8 (disappearing messages)
+added an `allow delete` rule for expired messages; if you set this project
+up before that, hard-deleting expired messages will silently fail with
+`permission-denied` until you re-paste. This doesn't affect correctness —
+disappearing messages still vanish from everyone's screen on schedule via
+client-side filtering — it just means expired docs pile up in Firestore
+until the rule is live.
+
 ## 6. Enable Storage (needed for Phase 5 media sharing)
 
 1. Go to **Build → Storage → Get started**.

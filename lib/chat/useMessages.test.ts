@@ -15,11 +15,12 @@ jest.mock("firebase/firestore", () => ({
   doc: jest.fn((_db, ...rest) => ({ path: rest })),
   addDoc: jest.fn().mockResolvedValue({ id: "msg-1" }),
   updateDoc: jest.fn().mockResolvedValue(undefined),
+  deleteDoc: jest.fn().mockResolvedValue(undefined),
   serverTimestamp: jest.fn(() => "mock-timestamp"),
   increment: jest.fn((n: number) => ({ __increment: n })),
 }));
 
-import { addDoc, updateDoc } from "firebase/firestore";
+import { addDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { useMessages } from "./useMessages";
 
 function fakeSnap(docs: Array<{ id: string; data: Record<string, unknown> }>) {
@@ -50,12 +51,12 @@ describe("useMessages", () => {
       {
         id: "m1", senderId: "a", type: "text", text: "hi", createdAt: 1000,
         mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined,
-        edited: undefined, deleted: undefined, replyTo: undefined,
+        edited: undefined, deleted: undefined, replyTo: undefined, expiresAt: null,
       },
       {
         id: "m2", senderId: "b", type: "text", text: "yo", createdAt: 2000,
         mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined,
-        edited: undefined, deleted: undefined, replyTo: undefined,
+        edited: undefined, deleted: undefined, replyTo: undefined, expiresAt: null,
       },
     ]);
     unsubscribe();
@@ -141,5 +142,33 @@ describe("useMessages", () => {
     const [, payload] = (updateDoc as jest.Mock).mock.calls[0];
     expect(payload["unreadCount.my-uid"]).toBe(0);
     expect(payload["lastRead.my-uid"]).toBe("mock-timestamp");
+  });
+
+  it("sendMessage includes expiresAt when the chat has disappearing messages on", async () => {
+    await useMessages.getState().sendMessage("chat-1", "my-uid", "other-uid", "hi", undefined, 123456);
+    const [, payload] = (addDoc as jest.Mock).mock.calls[0];
+    expect(payload.expiresAt).toBe(123456);
+  });
+
+  it("sendMessage omits expiresAt when disappearing messages are off", async () => {
+    await useMessages.getState().sendMessage("chat-1", "my-uid", "other-uid", "hi");
+    const [, payload] = (addDoc as jest.Mock).mock.calls[0];
+    expect(payload).not.toHaveProperty("expiresAt");
+  });
+
+  it("pruneExpired hard-deletes only messages past their expiresAt", async () => {
+    useMessages.setState({
+      messages: [
+        { id: "m1", senderId: "a", type: "text", text: "old", createdAt: 1000, expiresAt: Date.now() - 1000 },
+        { id: "m2", senderId: "b", type: "text", text: "future", createdAt: 2000, expiresAt: Date.now() + 100000 },
+        { id: "m3", senderId: "a", type: "text", text: "no expiry", createdAt: 3000 },
+      ],
+      loading: false,
+    });
+
+    await useMessages.getState().pruneExpired("chat-1");
+
+    expect(deleteDoc).toHaveBeenCalledTimes(1);
+    expect((deleteDoc as jest.Mock).mock.calls[0][0]).toEqual({ path: ["chats", "chat-1", "messages", "m1"] });
   });
 });

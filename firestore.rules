@@ -21,6 +21,13 @@ service cloud.firestore {
         allow read: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
         allow update: if request.auth != null && resource.data.senderId == request.auth.uid;
+        // Disappearing-message cleanup: any participant may hard-delete an
+        // already-expired message (not just the sender), so the first
+        // person to reopen the chat after expiry can prune it.
+        allow delete: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          && resource.data.expiresAt is number
+          && resource.data.expiresAt < request.time.toMillis();
       }
     }
   }

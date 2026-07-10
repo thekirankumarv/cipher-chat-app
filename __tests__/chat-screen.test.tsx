@@ -36,6 +36,8 @@ const mockUploadMedia = jest.fn();
 jest.mock("../lib/media/uploadMedia", () => ({ uploadMedia: (...args: any[]) => mockUploadMedia(...args) }));
 
 const mockSetTyping = jest.fn().mockResolvedValue(undefined);
+const mockSetDisappearing = jest.fn().mockResolvedValue(undefined);
+const mockPruneExpired = jest.fn().mockResolvedValue(undefined);
 const mockPresenceSubscribe = jest.fn(() => jest.fn());
 jest.mock("../lib/presence/useUserPresence", () => ({
   useUserPresence: jest.fn((selector: any) => selector({ byUid: {}, subscribe: mockPresenceSubscribe })),
@@ -57,11 +59,12 @@ describe("ChatScreen", () => {
         chats: [
           {
             id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1",
-            otherTyping: false, otherLastRead: null,
+            otherTyping: false, otherLastRead: null, disappearingDuration: "off",
           },
         ],
         subscribe: mockChatsSubscribe,
         setTyping: mockSetTyping,
+        setDisappearing: mockSetDisappearing,
       }),
     );
     (useMessages as unknown as jest.Mock).mockImplementation((selector: any) =>
@@ -76,6 +79,7 @@ describe("ChatScreen", () => {
         editMessage: mockEditMessage,
         deleteMessage: mockDeleteMessage,
         markRead: mockMarkRead,
+        pruneExpired: mockPruneExpired,
       }),
     );
   });
@@ -105,7 +109,9 @@ describe("ChatScreen", () => {
     fireEvent.changeText(input, "new message");
     fireEvent.press(await findByTestId("send-button"));
     await waitFor(() =>
-      expect(mockSendMessage).toHaveBeenCalledWith("chat-1", "my-uid", "other-uid", "new message"),
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        "chat-1", "my-uid", "other-uid", "new message", undefined, undefined,
+      ),
     );
     expect(input.props.value).toBe("");
   });
@@ -138,13 +144,17 @@ describe("ChatScreen", () => {
     fireEvent.press(await findByTestId("attach-media"));
 
     await waitFor(() =>
-      expect(mockSendMediaMessage).toHaveBeenCalledWith("chat-1", "my-uid", "other-uid", {
-        kind: "image",
-        url: "https://example.com/photo.jpg",
-        name: "photo.jpg",
-        size: 2048,
-        mime: "image/jpeg",
-      }),
+      expect(mockSendMediaMessage).toHaveBeenCalledWith(
+        "chat-1", "my-uid", "other-uid",
+        {
+          kind: "image",
+          url: "https://example.com/photo.jpg",
+          name: "photo.jpg",
+          size: 2048,
+          mime: "image/jpeg",
+        },
+        undefined, undefined,
+      ),
     );
   });
 
@@ -201,11 +211,11 @@ describe("ChatScreen", () => {
     fireEvent.changeText(input, "replying now");
     fireEvent.press(await findByTestId("send-button"));
     await waitFor(() =>
-      expect(mockSendMessage).toHaveBeenCalledWith("chat-1", "my-uid", "other-uid", "replying now", {
-        messageId: "m2",
-        senderId: "my-uid",
-        preview: "yo",
-      }),
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        "chat-1", "my-uid", "other-uid", "replying now",
+        { messageId: "m2", senderId: "my-uid", preview: "yo" },
+        undefined,
+      ),
     );
   });
 
@@ -272,6 +282,7 @@ describe("ChatScreen", () => {
         editMessage: mockEditMessage,
         deleteMessage: mockDeleteMessage,
         markRead: mockMarkRead,
+        pruneExpired: mockPruneExpired,
       }),
     );
     const { findByText, queryByTestId } = await render(
@@ -289,11 +300,12 @@ describe("ChatScreen", () => {
         chats: [
           {
             id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1",
-            otherTyping: true, otherLastRead: null,
+            otherTyping: true, otherLastRead: null, disappearingDuration: "off",
           },
         ],
         subscribe: mockChatsSubscribe,
         setTyping: mockSetTyping,
+        setDisappearing: mockSetDisappearing,
       }),
     );
     const { findByText } = await render(
@@ -326,11 +338,12 @@ describe("ChatScreen", () => {
         chats: [
           {
             id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1",
-            otherTyping: false, otherLastRead: 5000,
+            otherTyping: false, otherLastRead: 5000, disappearingDuration: "off",
           },
         ],
         subscribe: mockChatsSubscribe,
         setTyping: mockSetTyping,
+        setDisappearing: mockSetDisappearing,
       }),
     );
     const { findByTestId, findByText } = await render(
@@ -340,5 +353,72 @@ describe("ChatScreen", () => {
     );
     expect(await findByTestId("read-status-m2")).toBeTruthy();
     expect(await findByText("Read")).toBeTruthy();
+  });
+
+  it("shows the current disappearing setting and lets you change it", async () => {
+    const { findByTestId, findByText } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    expect(await findByText("Disappearing: Off")).toBeTruthy();
+
+    fireEvent.press(await findByTestId("disappearing-toggle"));
+    fireEvent.press(await findByTestId("disappearing-24h"));
+    expect(mockSetDisappearing).toHaveBeenCalledWith("chat-1", "24h");
+  });
+
+  it("sends with an expiresAt timestamp when disappearing messages are on", async () => {
+    (useChats as unknown as jest.Mock).mockImplementation((selector: any) =>
+      selector({
+        chats: [
+          {
+            id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1",
+            otherTyping: false, otherLastRead: null, disappearingDuration: "24h",
+          },
+        ],
+        subscribe: mockChatsSubscribe,
+        setTyping: mockSetTyping,
+        setDisappearing: mockSetDisappearing,
+      }),
+    );
+    const before = Date.now();
+    const { findByTestId } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    fireEvent.changeText(await findByTestId("message-input"), "vanishing text");
+    fireEvent.press(await findByTestId("send-button"));
+
+    await waitFor(() => expect(mockSendMessage).toHaveBeenCalled());
+    const [, , , , , expiresAt] = (mockSendMessage as jest.Mock).mock.calls[0];
+    expect(expiresAt).toBeGreaterThanOrEqual(before + 24 * 60 * 60 * 1000);
+    expect(expiresAt).toBeLessThan(before + 24 * 60 * 60 * 1000 + 5000);
+  });
+
+  it("hides a message once its expiresAt has passed", async () => {
+    (useMessages as unknown as jest.Mock).mockImplementation((selector: any) =>
+      selector({
+        messages: [
+          { id: "m1", senderId: "other-uid", type: "text", text: "long gone", createdAt: 1000, expiresAt: Date.now() - 1000 },
+          { id: "m2", senderId: "my-uid", type: "text", text: "still here", createdAt: 2000, expiresAt: Date.now() + 100000 },
+        ],
+        subscribe: mockSubscribe,
+        sendMessage: mockSendMessage,
+        sendMediaMessage: mockSendMediaMessage,
+        editMessage: mockEditMessage,
+        deleteMessage: mockDeleteMessage,
+        markRead: mockMarkRead,
+        pruneExpired: mockPruneExpired,
+      }),
+    );
+    const { findByText, queryByText } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    expect(await findByText("still here")).toBeTruthy();
+    expect(queryByText("long gone")).toBeNull();
   });
 });

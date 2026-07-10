@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 
+export type DisappearingDuration = "off" | "24h" | "7d";
+
 export type ChatSummary = {
   id: string;
   otherUid: string;
@@ -12,6 +14,7 @@ export type ChatSummary = {
   unreadCount: number;
   otherTyping: boolean;
   otherLastRead: number | null;
+  disappearingDuration: DisappearingDuration;
 };
 
 type RawChat = {
@@ -21,6 +24,7 @@ type RawChat = {
   unreadCount: Record<string, number>;
   typing?: Record<string, boolean>;
   lastRead?: Record<string, { toMillis: () => number }>;
+  disappearingDuration?: DisappearingDuration;
 };
 
 type ChatsState = {
@@ -28,6 +32,7 @@ type ChatsState = {
   loading: boolean;
   subscribe: (uid: string) => () => void;
   setTyping: (chatId: string, uid: string, isTyping: boolean) => Promise<void>;
+  setDisappearing: (chatId: string, duration: DisappearingDuration) => Promise<void>;
 };
 
 const userCache = new Map<string, { displayId: string; avatarSeed: string }>();
@@ -67,6 +72,7 @@ export const useChats = create<ChatsState>(() => ({
             unreadCount: chat.unreadCount?.[uid] ?? 0,
             otherTyping: chat.typing?.[otherUid] ?? false,
             otherLastRead: chat.lastRead?.[otherUid] ? chat.lastRead[otherUid].toMillis() : null,
+            disappearingDuration: chat.disappearingDuration ?? "off",
           };
         }),
       );
@@ -78,5 +84,9 @@ export const useChats = create<ChatsState>(() => ({
 
   setTyping: async (chatId, uid, isTyping) => {
     await updateDoc(doc(db, "chats", chatId), { [`typing.${uid}`]: isTyping }).catch(() => {});
+  },
+
+  setDisappearing: async (chatId, duration) => {
+    await updateDoc(doc(db, "chats", chatId), { disappearingDuration: duration });
   },
 }));
