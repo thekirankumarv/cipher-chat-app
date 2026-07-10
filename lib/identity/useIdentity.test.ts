@@ -7,6 +7,7 @@ jest.mock("../firebase/config", () => ({
 
 jest.mock("firebase/auth", () => ({
   signInAnonymously: jest.fn(),
+  signOut: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("firebase/firestore", () => ({
@@ -16,7 +17,7 @@ jest.mock("firebase/firestore", () => ({
   serverTimestamp: jest.fn(() => "mock-timestamp"),
 }));
 
-import { signInAnonymously } from "firebase/auth";
+import { signInAnonymously, signOut } from "firebase/auth";
 import { getDoc, setDoc } from "firebase/firestore";
 import { useIdentity } from "./useIdentity";
 
@@ -131,5 +132,22 @@ describe("useIdentity", () => {
     const state = useIdentity.getState();
     expect(state.status).toBe("bootstrapping");
     expect(state.error).toBe("write denied");
+  });
+
+  it("resetIdentity signs out, clears identity, and bootstraps a fresh one", async () => {
+    useIdentity.setState({ status: "ready", uid: "uid-old", displayId: "old-name", avatarSeed: "old-seed" });
+    (signInAnonymously as jest.Mock).mockResolvedValue({ user: { uid: "uid-new" } });
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
+
+    await act(async () => {
+      await useIdentity.getState().resetIdentity();
+    });
+
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(signInAnonymously).toHaveBeenCalledTimes(1);
+    const state = useIdentity.getState();
+    expect(state.status).toBe("needs-identity");
+    expect(state.uid).toBe("uid-new");
+    expect(state.displayId).toBeNull();
   });
 });

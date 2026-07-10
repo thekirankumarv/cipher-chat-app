@@ -45,18 +45,23 @@ export default function HomeScreen() {
         >
           Cipher
         </Text>
-        <Pressable
-          testID="connect-fab"
-          onPress={() => router.push("/connect")}
-          style={{
-            backgroundColor: colors.accent,
-            borderRadius: radii.button,
-            paddingVertical: spacing.sm,
-            paddingHorizontal: spacing.lg,
-          }}
-        >
-          <Text style={{ color: colors.accentInk, fontWeight: "700" }}>+ Connect</Text>
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <Pressable testID="settings-link" onPress={() => router.push("/settings")}>
+            <Text style={{ color: colors.textSecondary, fontWeight: "600" }}>Settings</Text>
+          </Pressable>
+          <Pressable
+            testID="connect-fab"
+            onPress={() => router.push("/connect")}
+            style={{
+              backgroundColor: colors.accent,
+              borderRadius: radii.button,
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.lg,
+            }}
+          >
+            <Text style={{ color: colors.accentInk, fontWeight: "700" }}>+ Connect</Text>
+          </Pressable>
+        </View>
       </View>
 
       {!loading && chats.length === 0 ? (

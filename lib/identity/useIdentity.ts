@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { signInAnonymously, type User } from "firebase/auth";
+import { signInAnonymously, signOut, type User } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 import { generateDisplayId, generateAvatarSeed } from "./generators";
@@ -17,6 +17,7 @@ type IdentityState = {
   shuffleDraft: () => void;
   bootstrap: () => Promise<void>;
   confirmIdentity: () => Promise<void>;
+  resetIdentity: () => Promise<void>;
 };
 
 export const useIdentity = create<IdentityState>((set, get) => ({
@@ -91,5 +92,24 @@ export const useIdentity = create<IdentityState>((set, get) => ({
       });
       throw err;
     }
+  },
+
+  // "Delete local identity": there's no account to delete server-side for
+  // an anonymous user, so this signs out (dropping the persisted session)
+  // and immediately bootstraps a brand-new one. The old uid's Firestore
+  // data (chats, messages) is simply orphaned — acceptable at 10-user
+  // friend-group scale, matches the "no accounts" design.
+  resetIdentity: async () => {
+    await signOut(auth);
+    set({
+      status: "bootstrapping",
+      uid: null,
+      displayId: null,
+      avatarSeed: null,
+      draftDisplayId: generateDisplayId(),
+      draftAvatarSeed: generateAvatarSeed(),
+      error: null,
+    });
+    await get().bootstrap();
   },
 }));
