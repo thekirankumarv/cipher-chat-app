@@ -7,7 +7,7 @@ import {
 import {
   initializeAuth,
   getAuth,
-  // @ts-ignore -- upstream @firebase/auth package.json exports puts a bare
+  // @ts-expect-error -- upstream @firebase/auth package.json exports puts a bare
   // "types" condition before the "react-native" condition, so TS's
   // customConditions never reaches the .d.ts that declares this export
   // (getReactNativePersistence lives in @firebase/auth/dist/rn/index.rn.d.ts).
