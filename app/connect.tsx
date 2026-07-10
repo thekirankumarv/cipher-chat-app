@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -24,13 +24,22 @@ export default function ConnectScreen() {
 
   const [tab, setTab] = useState<Tab>("my-code");
   const [myCode, setMyCode] = useState<string | null>(null);
+  const [myCodeError, setMyCodeError] = useState<string | null>(null);
   const [enteredCode, setEnteredCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const scanLockRef = useRef(false);
+
+  const loadMyCode = () => {
+    setMyCodeError(null);
+    createInvite()
+      .then(setMyCode)
+      .catch(() => setMyCodeError("Couldn't generate your code. Try again."));
+  };
 
   useEffect(() => {
-    createInvite().then(setMyCode);
+    loadMyCode();
   }, [createInvite]);
 
   const handleRedeem = async (code: string) => {
@@ -88,6 +97,23 @@ export default function ConnectScreen() {
               <Text style={{ color: colors.textSecondary, marginTop: spacing.sm, textAlign: "center" }}>
                 Share this code so a friend can connect with you
               </Text>
+            </>
+          ) : myCodeError ? (
+            <>
+              <Text style={{ color: colors.danger, textAlign: "center" }}>{myCodeError}</Text>
+              <Pressable
+                testID="my-code-retry"
+                onPress={loadMyCode}
+                style={{
+                  backgroundColor: colors.accent,
+                  borderRadius: radii.button,
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.xxl,
+                  marginTop: spacing.lg,
+                }}
+              >
+                <Text style={{ color: colors.accentInk, fontWeight: "700" }}>Try again</Text>
+              </Pressable>
             </>
           ) : (
             <Text style={{ color: colors.textSecondary }}>Generating your code…</Text>
@@ -159,9 +185,19 @@ export default function ConnectScreen() {
                 scanned
                   ? undefined
                   : ({ data }) => {
+                      if (scanLockRef.current) return;
+                      scanLockRef.current = true;
                       setScanned(true);
                       const code = data.replace("cipher://connect/", "");
-                      handleRedeem(code).finally(() => setScanned(false));
+                      handleRedeem(code)
+                        .then(() => {
+                          // navigation is in flight; keep the scanner locked so the
+                          // same code in frame can't be re-processed before we leave
+                        })
+                        .catch(() => {
+                          scanLockRef.current = false;
+                          setScanned(false);
+                        });
                     }
               }
             />
