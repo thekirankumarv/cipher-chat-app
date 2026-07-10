@@ -6,8 +6,9 @@ import { useChats } from "../lib/chat/useChats";
 import { useMessages } from "../lib/chat/useMessages";
 
 const mockBack = jest.fn();
+const mockPush = jest.fn();
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ back: mockBack }),
+  useRouter: () => ({ back: mockBack, push: mockPush }),
   useLocalSearchParams: () => ({ id: "chat-1" }),
 }));
 jest.mock("../lib/identity/useIdentity", () => ({ useIdentity: jest.fn() }));

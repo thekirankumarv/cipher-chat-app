@@ -11,14 +11,15 @@ jest.mock("firebase/auth", () => ({
 }));
 
 jest.mock("firebase/firestore", () => ({
-  doc: jest.fn(() => ({ id: "mock-doc-ref" })),
+  doc: jest.fn((_db, col, id) => ({ id, col })),
   getDoc: jest.fn(),
   setDoc: jest.fn(),
+  updateDoc: jest.fn().mockResolvedValue(undefined),
   serverTimestamp: jest.fn(() => "mock-timestamp"),
 }));
 
 import { signInAnonymously, signOut } from "firebase/auth";
-import { getDoc, setDoc } from "firebase/firestore";
+import { getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { useIdentity } from "./useIdentity";
 
 describe("useIdentity", () => {
@@ -143,11 +144,24 @@ describe("useIdentity", () => {
       await useIdentity.getState().resetIdentity();
     });
 
+    expect(updateDoc).toHaveBeenCalledWith({ id: "uid-old", col: "users" }, { online: false, lastSeen: "mock-timestamp" });
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(signInAnonymously).toHaveBeenCalledTimes(1);
     const state = useIdentity.getState();
     expect(state.status).toBe("needs-identity");
     expect(state.uid).toBe("uid-new");
     expect(state.displayId).toBeNull();
+  });
+
+  it("resetIdentity does nothing to presence when there was no prior uid", async () => {
+    useIdentity.setState({ status: "bootstrapping", uid: null });
+    (signInAnonymously as jest.Mock).mockResolvedValue({ user: { uid: "uid-fresh" } });
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
+
+    await act(async () => {
+      await useIdentity.getState().resetIdentity();
+    });
+
+    expect(updateDoc).not.toHaveBeenCalled();
   });
 });

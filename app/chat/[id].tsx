@@ -221,28 +221,40 @@ export default function ChatScreen() {
         <Pressable testID="chat-back" onPress={() => router.back()} style={{ marginRight: spacing.md }}>
           <Text style={{ color: colors.accent, fontSize: typeScale.header.fontSize }}>‹</Text>
         </Pressable>
-        {chatMeta ? <Avatar seed={chatMeta.otherAvatarSeed} size={36} /> : null}
-        <View style={{ marginLeft: spacing.sm }}>
-          <Text
-            style={{
-              color: colors.text,
-              fontSize: typeScale.chatName.fontSize,
-              fontWeight: typeScale.chatName.fontWeight,
-            }}
-          >
-            {chatMeta?.otherDisplayId ?? "Chat"}
-          </Text>
-          <Text testID="presence-status" style={{ color: colors.textSecondary, fontSize: typeScale.meta.fontSize }}>
-            {chatMeta?.otherTyping
-              ? "typing…"
-              : chatMeta?.otherUid && presenceByUid[chatMeta.otherUid]?.online
-                ? "Online"
-                : chatMeta?.otherUid
-                  ? formatLastSeen(presenceByUid[chatMeta.otherUid]?.lastSeen ?? null)
-                  : ""}
-          </Text>
-        </View>
-        <View style={{ flex: 1 }} />
+        <Pressable
+          testID="chat-info-link"
+          onPress={() => id && router.push({ pathname: "/chat-info", params: { id } })}
+          style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+        >
+          {chatMeta ? <Avatar seed={chatMeta.otherAvatarSeed} size={36} /> : null}
+          <View style={{ marginLeft: spacing.sm }}>
+            <Text
+              style={{
+                color: colors.text,
+                fontSize: typeScale.chatName.fontSize,
+                fontWeight: typeScale.chatName.fontWeight,
+              }}
+            >
+              {chatMeta?.otherDisplayId ?? "Chat"}
+            </Text>
+            <Text testID="presence-status" style={{ color: colors.textSecondary, fontSize: typeScale.meta.fontSize }}>
+              {chatMeta?.otherTyping
+                ? "typing…"
+                : chatMeta?.otherUid && presenceByUid[chatMeta.otherUid]?.online
+                  ? "Online"
+                  : chatMeta?.otherUid
+                    ? formatLastSeen(presenceByUid[chatMeta.otherUid]?.lastSeen ?? null)
+                    : ""}
+            </Text>
+          </View>
+        </Pressable>
+        <Pressable
+          testID="chat-search-link"
+          onPress={() => id && router.push({ pathname: "/search", params: { chatId: id } })}
+          style={{ marginRight: spacing.md }}
+        >
+          <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>Search</Text>
+        </Pressable>
         <Pressable testID="disappearing-toggle" onPress={() => setShowDisappearingMenu((v) => !v)}>
           <Text style={{ color: colors.accent, fontSize: typeScale.meta.fontSize }}>
             {chatMeta?.disappearingDuration === "off" || !chatMeta?.disappearingDuration

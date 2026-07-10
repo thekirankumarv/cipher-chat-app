@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { signInAnonymously, signOut, type User } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
 import { generateDisplayId, generateAvatarSeed } from "./generators";
 
@@ -100,6 +100,15 @@ export const useIdentity = create<IdentityState>((set, get) => ({
   // data (chats, messages) is simply orphaned — acceptable at 10-user
   // friend-group scale, matches the "no accounts" design.
   resetIdentity: async () => {
+    // Mark presence offline while still authenticated as the outgoing
+    // identity — usePresence's own unmount cleanup races with the new
+    // signInAnonymously() below and, once that resolves, is no longer
+    // permitted to write the old uid's doc (rules require request.auth.uid
+    // to match), leaving the abandoned identity stuck showing "Online".
+    const outgoingUid = get().uid;
+    if (outgoingUid) {
+      await updateDoc(doc(db, "users", outgoingUid), { online: false, lastSeen: serverTimestamp() }).catch(() => {});
+    }
     await signOut(auth);
     set({
       status: "bootstrapping",

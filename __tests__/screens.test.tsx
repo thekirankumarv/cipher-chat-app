@@ -2,13 +2,9 @@ import React from "react";
 import { render } from "@testing-library/react-native";
 import { ThemeProvider } from "../lib/theme/ThemeProvider";
 import MediaViewerScreen from "../app/media-viewer";
-import ChatInfoScreen from "../app/chat-info";
-import SearchScreen from "../app/search";
 
 const screens: Array<[string, React.ComponentType, string]> = [
   ["MediaViewer", MediaViewerScreen, "Media Viewer"],
-  ["ChatInfo", ChatInfoScreen, "Chat Info"],
-  ["Search", SearchScreen, "In-chat Search"],
 ];
 
 describe("stub screens", () => {
