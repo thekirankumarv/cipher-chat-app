@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Redirect, useRouter } from "expo-router";
 import { useTheme } from "../lib/theme/ThemeProvider";
@@ -11,10 +10,6 @@ export default function WelcomeScreen() {
   const status = useIdentity((state) => state.status);
   const error = useIdentity((state) => state.error);
   const bootstrap = useIdentity((state) => state.bootstrap);
-
-  useEffect(() => {
-    bootstrap();
-  }, [bootstrap]);
 
   if (status === "ready") {
     return <Redirect href="/home" />;

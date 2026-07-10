@@ -10,6 +10,7 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { ThemeProvider } from "../lib/theme/ThemeProvider";
+import { useIdentity } from "../lib/identity/useIdentity";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,12 +21,20 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
+  const bootstrap = useIdentity((s) => s.bootstrap);
 
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  // Runs once here (root layout is always mounted, unlike index.tsx which
+  // only mounts for that one route) so a hard reload on /home, /chat/[id],
+  // etc. still restores the anonymous session instead of leaving uid null.
+  useEffect(() => {
+    bootstrap();
+  }, [bootstrap]);
 
   if (!fontsLoaded) {
     return null;

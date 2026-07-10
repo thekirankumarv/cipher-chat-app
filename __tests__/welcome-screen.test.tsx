@@ -36,7 +36,6 @@ describe("WelcomeScreen", () => {
       </ThemeProvider>
     );
     expect(await findByText("Loading…")).toBeTruthy();
-    expect(bootstrapMock).toHaveBeenCalledTimes(1);
   });
 
   it("shows Get Started and navigates to create-identity when pressed", async () => {
@@ -81,7 +80,9 @@ describe("WelcomeScreen", () => {
     expect(
       await findByText("Couldn't connect. Check your connection and try again.")
     ).toBeTruthy();
+    // bootstrap() is triggered on mount by the root layout, not this screen,
+    // so pressing retry here is the only call this test can observe.
     fireEvent.press(await findByTestId("retry-button"));
-    expect(bootstrapMock).toHaveBeenCalledTimes(2);
+    expect(bootstrapMock).toHaveBeenCalledTimes(1);
   });
 });
