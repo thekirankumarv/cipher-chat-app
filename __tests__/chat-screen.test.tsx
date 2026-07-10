@@ -16,8 +16,21 @@ jest.mock("../lib/chat/useChats", () => ({ useChats: jest.fn() }));
 const mockSubscribe = jest.fn(() => jest.fn());
 const mockChatsSubscribe = jest.fn(() => jest.fn());
 const mockSendMessage = jest.fn().mockResolvedValue(undefined);
+const mockSendMediaMessage = jest.fn().mockResolvedValue(undefined);
 const mockMarkRead = jest.fn().mockResolvedValue(undefined);
 jest.mock("../lib/chat/useMessages", () => ({ useMessages: jest.fn() }));
+
+const mockPickImageOrVideo = jest.fn();
+const mockPickFile = jest.fn();
+jest.mock("../lib/media/pickMedia", () => ({
+  pickImageOrVideo: () => mockPickImageOrVideo(),
+  pickFile: () => mockPickFile(),
+}));
+
+const mockUploadMedia = jest.fn();
+jest.mock("../lib/media/uploadMedia", () => ({ uploadMedia: (...args: any[]) => mockUploadMedia(...args) }));
+
+(globalThis as any).fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve("fake-blob") });
 
 import ChatScreen from "../app/chat/[id]";
 
@@ -38,11 +51,12 @@ describe("ChatScreen", () => {
     (useMessages as unknown as jest.Mock).mockImplementation((selector: any) =>
       selector({
         messages: [
-          { id: "m1", senderId: "other-uid", text: "hey", createdAt: 1000 },
-          { id: "m2", senderId: "my-uid", text: "yo", createdAt: 2000 },
+          { id: "m1", senderId: "other-uid", type: "text", text: "hey", createdAt: 1000 },
+          { id: "m2", senderId: "my-uid", type: "text", text: "yo", createdAt: 2000 },
         ],
         subscribe: mockSubscribe,
         sendMessage: mockSendMessage,
+        sendMediaMessage: mockSendMediaMessage,
         markRead: mockMarkRead,
       }),
     );
@@ -86,5 +100,67 @@ describe("ChatScreen", () => {
     );
     fireEvent.press(await findByTestId("send-button"));
     expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("picks, uploads, and sends an image", async () => {
+    mockPickImageOrVideo.mockResolvedValue({
+      uri: "file://photo.jpg",
+      name: "photo.jpg",
+      size: 2048,
+      mime: "image/jpeg",
+      kind: "image",
+    });
+    mockUploadMedia.mockResolvedValue("https://example.com/photo.jpg");
+
+    const { findByTestId } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    fireEvent.press(await findByTestId("attach-media"));
+
+    await waitFor(() =>
+      expect(mockSendMediaMessage).toHaveBeenCalledWith("chat-1", "my-uid", "other-uid", {
+        kind: "image",
+        url: "https://example.com/photo.jpg",
+        name: "photo.jpg",
+        size: 2048,
+        mime: "image/jpeg",
+      }),
+    );
+  });
+
+  it("shows an error and does not send when upload fails", async () => {
+    mockPickFile.mockResolvedValue({
+      uri: "file://doc.pdf",
+      name: "doc.pdf",
+      size: 4096,
+      mime: "application/pdf",
+      kind: "file",
+    });
+    mockUploadMedia.mockRejectedValue(new Error("network down"));
+
+    const { findByTestId, findByText } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    fireEvent.press(await findByTestId("attach-file"));
+
+    expect(await findByText("Upload failed. Try again.")).toBeTruthy();
+    expect(mockSendMediaMessage).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when the picker is cancelled", async () => {
+    mockPickImageOrVideo.mockResolvedValue(null);
+    const { findByTestId } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    fireEvent.press(await findByTestId("attach-media"));
+    await waitFor(() => expect(mockPickImageOrVideo).toHaveBeenCalledTimes(1));
+    expect(mockUploadMedia).not.toHaveBeenCalled();
+    expect(mockSendMediaMessage).not.toHaveBeenCalled();
   });
 });

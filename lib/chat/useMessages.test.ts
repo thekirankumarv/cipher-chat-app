@@ -47,8 +47,8 @@ describe("useMessages", () => {
     const { messages, loading } = useMessages.getState();
     expect(loading).toBe(false);
     expect(messages).toEqual([
-      { id: "m1", senderId: "a", text: "hi", createdAt: 1000 },
-      { id: "m2", senderId: "b", text: "yo", createdAt: 2000 },
+      { id: "m1", senderId: "a", type: "text", text: "hi", createdAt: 1000, mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined },
+      { id: "m2", senderId: "b", type: "text", text: "yo", createdAt: 2000, mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined },
     ]);
     unsubscribe();
   });
@@ -58,7 +58,7 @@ describe("useMessages", () => {
 
     expect(addDoc).toHaveBeenCalledTimes(1);
     const [, payload] = (addDoc as jest.Mock).mock.calls[0];
-    expect(payload).toEqual({ senderId: "my-uid", text: "hello", createdAt: "mock-timestamp" });
+    expect(payload).toEqual({ senderId: "my-uid", type: "text", text: "hello", createdAt: "mock-timestamp" });
 
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [, updatePayload] = (updateDoc as jest.Mock).mock.calls[0];
@@ -70,6 +70,32 @@ describe("useMessages", () => {
     await useMessages.getState().sendMessage("chat-1", "my-uid", "other-uid", "   ");
     expect(addDoc).not.toHaveBeenCalled();
     expect(updateDoc).not.toHaveBeenCalled();
+  });
+
+  it("sendMediaMessage writes a media message and a preview into lastMessage", async () => {
+    await useMessages.getState().sendMediaMessage("chat-1", "my-uid", "other-uid", {
+      kind: "image",
+      url: "https://example.com/photo.jpg",
+      name: "photo.jpg",
+      size: 1234,
+      mime: "image/jpeg",
+    });
+
+    expect(addDoc).toHaveBeenCalledTimes(1);
+    const [, payload] = (addDoc as jest.Mock).mock.calls[0];
+    expect(payload).toEqual({
+      senderId: "my-uid",
+      type: "image",
+      text: "",
+      mediaUrl: "https://example.com/photo.jpg",
+      mediaName: "photo.jpg",
+      mediaSize: 1234,
+      mediaMime: "image/jpeg",
+      createdAt: "mock-timestamp",
+    });
+
+    const [, updatePayload] = (updateDoc as jest.Mock).mock.calls[0];
+    expect(updatePayload.lastMessage).toBe("Photo");
   });
 
   it("markRead resets the unread count for the given uid", async () => {

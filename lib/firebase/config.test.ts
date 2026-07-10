@@ -11,6 +11,7 @@ const mockApp = { name: "mock-app" };
 const mockAuth = { name: "mock-auth" };
 const mockPersistence = { name: "mock-persistence" };
 const mockDb = { name: "mock-db" };
+const mockStorage = { name: "mock-storage" };
 
 jest.mock("firebase/app", () => ({
   initializeApp: jest.fn(() => mockApp),
@@ -26,6 +27,10 @@ jest.mock("firebase/auth", () => ({
 
 jest.mock("firebase/firestore", () => ({
   getFirestore: jest.fn(() => mockDb),
+}));
+
+jest.mock("firebase/storage", () => ({
+  getStorage: jest.fn(() => mockStorage),
 }));
 
 describe("firebase config", () => {
@@ -44,10 +49,11 @@ describe("firebase config", () => {
       process.env[key] = `test-${key}`;
     });
 
-    const { firebaseApp, auth, db } = require("./config");
+    const { firebaseApp, auth, db, storage } = require("./config");
     const { initializeApp } = require("firebase/app");
     const { initializeAuth } = require("firebase/auth");
     const { getFirestore } = require("firebase/firestore");
+    const { getStorage } = require("firebase/storage");
 
     expect(initializeApp).toHaveBeenCalledWith({
       apiKey: "test-EXPO_PUBLIC_FIREBASE_API_KEY",
@@ -59,8 +65,10 @@ describe("firebase config", () => {
     });
     expect(initializeAuth).toHaveBeenCalledWith(mockApp, { persistence: mockPersistence });
     expect(getFirestore).toHaveBeenCalledWith(mockApp);
+    expect(getStorage).toHaveBeenCalledWith(mockApp);
     expect(firebaseApp).toBe(mockApp);
     expect(auth).toBe(mockAuth);
     expect(db).toBe(mockDb);
+    expect(storage).toBe(mockStorage);
   });
 });

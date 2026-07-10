@@ -39,6 +39,12 @@
         {
           "cameraPermission": "Allow Cipher to access your camera to scan a connect code."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Cipher to access your photos to share images and videos."
+        }
       ]
     ],
     "experiments": {

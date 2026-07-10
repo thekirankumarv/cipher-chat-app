@@ -54,7 +54,17 @@ The rules that scope reads/writes to your own data are already written in
   in): `firebase deploy --only firestore:rules` (requires running
   `firebase init` once to link this repo to your project first).
 
-## 6. Run the app
+## 6. Enable Storage (needed for Phase 5 media sharing)
+
+1. Go to **Build → Storage → Get started**.
+2. Pick the same region you used for Firestore, production mode.
+3. Deploy `storage.rules` (repo root) the same way as step 5 — paste into
+   **Storage → Rules** and Publish, or `firebase deploy --only storage`.
+
+Without this, image/video/file sharing in chat will fail on send — text
+messaging and everything from Phases 1-4 work regardless.
+
+## 7. Run the app
 
 ```bash
 npm start
