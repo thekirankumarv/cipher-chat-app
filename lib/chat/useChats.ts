@@ -78,6 +78,8 @@ export const useChats = create<ChatsState>(() => ({
       );
       resolved.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
       useChats.setState({ chats: resolved, loading: false });
+    }, () => {
+      useChats.setState({ loading: false });
     });
     return unsubscribe;
   },

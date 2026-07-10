@@ -1,6 +1,7 @@
 import { act } from "@testing-library/react-native";
 
 let snapshotCallback: (snap: unknown) => void = () => {};
+let snapshotErrorCallback: (err: unknown) => void = () => {};
 
 jest.mock("../firebase/config", () => ({ db: {} }));
 
@@ -8,8 +9,9 @@ jest.mock("firebase/firestore", () => ({
   collection: jest.fn(() => ({})),
   query: jest.fn(() => ({})),
   orderBy: jest.fn(() => ({})),
-  onSnapshot: jest.fn((_q, callback) => {
+  onSnapshot: jest.fn((_q, callback, errorCallback) => {
     snapshotCallback = callback;
+    snapshotErrorCallback = errorCallback;
     return jest.fn();
   }),
   doc: jest.fn((_db, ...rest) => ({ path: rest })),
@@ -170,5 +172,17 @@ describe("useMessages", () => {
 
     expect(deleteDoc).toHaveBeenCalledTimes(1);
     expect((deleteDoc as jest.Mock).mock.calls[0][0]).toEqual({ path: ["chats", "chat-1", "messages", "m1"] });
+  });
+
+  it("subscribe sets an error instead of throwing when the listener is denied (e.g. a stale deep link)", async () => {
+    useMessages.getState().subscribe("chat-1");
+
+    await act(async () => {
+      snapshotErrorCallback(new Error("permission-denied"));
+    });
+
+    const { loading, error } = useMessages.getState();
+    expect(loading).toBe(false);
+    expect(error).toBe("not-found");
   });
 });

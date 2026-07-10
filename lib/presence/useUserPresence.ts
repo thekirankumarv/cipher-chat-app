@@ -31,7 +31,7 @@ export const useUserPresence = create<PresenceState>((set, get) => ({
           },
         },
       });
-    });
+    }, () => {});
     return unsubscribe;
   },
 }));

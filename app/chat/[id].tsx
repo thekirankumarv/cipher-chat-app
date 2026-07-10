@@ -54,6 +54,7 @@ export default function ChatScreen() {
   const presenceByUid = useUserPresence((s) => s.byUid);
   const presenceSubscribe = useUserPresence((s) => s.subscribe);
   const messages = useMessages((s) => s.messages);
+  const messagesError = useMessages((s) => s.error);
   const subscribe = useMessages((s) => s.subscribe);
   const sendMessage = useMessages((s) => s.sendMessage);
   const sendMediaMessage = useMessages((s) => s.sendMediaMessage);
@@ -78,6 +79,14 @@ export default function ChatScreen() {
     const unsubscribe = subscribe(id);
     return unsubscribe;
   }, [id, subscribe]);
+
+  // A stale deep link (e.g. reopening a tab after resetting identity) can
+  // point at a chat this identity was never part of, or that no longer
+  // exists — Firestore denies the read, so bounce back to Home instead of
+  // leaving a blank screen.
+  useEffect(() => {
+    if (messagesError) router.replace("/home");
+  }, [messagesError, router]);
 
   // Chat metadata (friend's name/avatar) normally comes from Home's chat-list
   // subscription. Landing here directly — a deep link or a page reload while

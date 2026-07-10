@@ -27,6 +27,17 @@ describe("HomeScreen", () => {
     );
   }
 
+  it("shows a loading state before the first chat snapshot resolves", async () => {
+    mockChatsState({ chats: [], loading: true });
+    const { findByTestId, queryByText } = await render(
+      <ThemeProvider>
+        <HomeScreen />
+      </ThemeProvider>
+    );
+    expect(await findByTestId("home-loading")).toBeTruthy();
+    expect(queryByText("No connections yet")).toBeNull();
+  });
+
   it("shows the empty state when there are no chats", async () => {
     mockChatsState({ chats: [], loading: false });
     const { findByText } = await render(

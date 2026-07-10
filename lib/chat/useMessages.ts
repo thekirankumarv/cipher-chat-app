@@ -63,6 +63,7 @@ type RawMessage = {
 type MessagesState = {
   messages: Message[];
   loading: boolean;
+  error: string | null;
   subscribe: (chatId: string) => () => void;
   sendMessage: (
     chatId: string,
@@ -97,9 +98,10 @@ async function bumpChatSummary(chatId: string, otherUid: string, preview: string
 export const useMessages = create<MessagesState>((_set, get) => ({
   messages: [],
   loading: true,
+  error: null,
 
   subscribe: (chatId: string) => {
-    useMessages.setState({ messages: [], loading: true });
+    useMessages.setState({ messages: [], loading: true, error: null });
     const q = query(collection(db, "chats", chatId, "messages"), orderBy("createdAt", "asc"));
     const unsubscribe = onSnapshot(q, (snap) => {
       const messages = snap.docs.map((d) => {
@@ -121,6 +123,8 @@ export const useMessages = create<MessagesState>((_set, get) => ({
         };
       });
       useMessages.setState({ messages, loading: false });
+    }, () => {
+      useMessages.setState({ loading: false, error: "not-found" });
     });
     return unsubscribe;
   },

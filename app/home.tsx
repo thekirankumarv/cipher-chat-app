@@ -64,7 +64,13 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {!loading && chats.length === 0 ? (
+      {loading && chats.length === 0 ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <Text testID="home-loading" style={{ color: colors.textSecondary }}>
+            Loading…
+          </Text>
+        </View>
+      ) : !loading && chats.length === 0 ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg }}>
           <Text
             style={{

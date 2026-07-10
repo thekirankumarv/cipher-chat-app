@@ -7,8 +7,9 @@ import { useMessages } from "../lib/chat/useMessages";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ back: mockBack, push: mockPush }),
+  useRouter: () => ({ back: mockBack, push: mockPush, replace: mockReplace }),
   useLocalSearchParams: () => ({ id: "chat-1" }),
 }));
 jest.mock("../lib/identity/useIdentity", () => ({ useIdentity: jest.fn() }));
@@ -98,6 +99,28 @@ describe("ChatScreen", () => {
     expect(mockSubscribe).toHaveBeenCalledWith("chat-1");
     expect(mockChatsSubscribe).toHaveBeenCalledWith("my-uid");
     expect(mockMarkRead).toHaveBeenCalledWith("chat-1", "my-uid");
+  });
+
+  it("redirects to Home when the messages subscription errors (e.g. a stale deep link to an inaccessible chat)", async () => {
+    (useMessages as unknown as jest.Mock).mockImplementation((selector: any) =>
+      selector({
+        messages: [],
+        error: "not-found",
+        subscribe: mockSubscribe,
+        sendMessage: mockSendMessage,
+        sendMediaMessage: mockSendMediaMessage,
+        editMessage: mockEditMessage,
+        deleteMessage: mockDeleteMessage,
+        markRead: mockMarkRead,
+        pruneExpired: mockPruneExpired,
+      }),
+    );
+    await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/home"));
   });
 
   it("sends a message and clears the input", async () => {
