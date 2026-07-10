@@ -1,7 +1,7 @@
 # Cipher
 
 Private, anonymous 1-to-1 chat for a closed friend group (max ~10 people).
-No email, phone, name, or password ever collected — identity is a
+No email, phone, name, or password ever collected. Identity is a
 generated User ID + procedural avatar, tied to an anonymous Firebase auth
 session. Built with Expo (React Native + TypeScript) and Firebase
 (Anonymous Auth + Firestore).
