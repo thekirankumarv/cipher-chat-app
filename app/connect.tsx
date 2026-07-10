@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
 import { useRouter } from "expo-router";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { useTheme } from "../lib/theme/ThemeProvider";
 import { spacing, typeScale, radii } from "../lib/theme/tokens";
 import { useInvite } from "../lib/invite/useInvite";
@@ -25,6 +26,8 @@ export default function ConnectScreen() {
   const [myCode, setMyCode] = useState<string | null>(null);
   const [enteredCode, setEnteredCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
 
   useEffect(() => {
     createInvite().then(setMyCode);
@@ -131,8 +134,38 @@ export default function ConnectScreen() {
       ) : null}
 
       {tab === "scan" ? (
-        <View style={{ alignItems: "center" }}>
-          <Text style={{ color: colors.textSecondary }}>Scan QR is set up in the next task.</Text>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          {!permission ? (
+            <Text style={{ color: colors.textSecondary }}>Loading camera…</Text>
+          ) : !permission.granted ? (
+            <Pressable
+              testID="camera-permission-button"
+              onPress={requestPermission}
+              style={{
+                backgroundColor: colors.accent,
+                borderRadius: radii.button,
+                paddingVertical: spacing.md,
+                paddingHorizontal: spacing.xxl,
+              }}
+            >
+              <Text style={{ color: colors.accentInk, fontWeight: "700" }}>Allow camera access</Text>
+            </Pressable>
+          ) : (
+            <CameraView
+              testID="camera-view"
+              style={{ width: "100%", height: 300, borderRadius: radii.card }}
+              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              onBarcodeScanned={
+                scanned
+                  ? undefined
+                  : ({ data }) => {
+                      setScanned(true);
+                      const code = data.replace("cipher://connect/", "");
+                      handleRedeem(code).finally(() => setScanned(false));
+                    }
+              }
+            />
+          )}
         </View>
       ) : null}
     </View>

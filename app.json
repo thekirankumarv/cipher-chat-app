@@ -33,7 +33,13 @@
           "imageWidth": 76
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Cipher to access your camera to scan a connect code."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
