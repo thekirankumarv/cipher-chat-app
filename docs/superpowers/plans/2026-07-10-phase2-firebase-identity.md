@@ -71,6 +71,8 @@ EXPO_PUBLIC_FIREBASE_APP_ID=
 
 - [ ] **Step 3: Write the failing test**
 
+The real `firebase` package ships ESM builds that Jest's default `transformIgnorePatterns` won't parse, so this test mocks `firebase/app`, `firebase/auth`, and `firebase/firestore` entirely rather than letting Jest resolve the real SDK — this keeps the test scoped to verifying *our* config logic (env-var validation, correct wiring of app→auth/db) without fighting Firebase's module format.
+
 Write `lib/firebase/config.test.ts`:
 ```ts
 const REQUIRED_KEYS = [
@@ -82,9 +84,31 @@ const REQUIRED_KEYS = [
   "EXPO_PUBLIC_FIREBASE_APP_ID",
 ];
 
+const mockApp = { name: "mock-app" };
+const mockAuth = { name: "mock-auth" };
+const mockPersistence = { name: "mock-persistence" };
+const mockDb = { name: "mock-db" };
+
+jest.mock("firebase/app", () => ({
+  initializeApp: jest.fn(() => mockApp),
+  getApps: jest.fn(() => []),
+  getApp: jest.fn(() => mockApp),
+}));
+
+jest.mock("firebase/auth", () => ({
+  initializeAuth: jest.fn(() => mockAuth),
+  getAuth: jest.fn(() => mockAuth),
+  getReactNativePersistence: jest.fn(() => mockPersistence),
+}));
+
+jest.mock("firebase/firestore", () => ({
+  getFirestore: jest.fn(() => mockDb),
+}));
+
 describe("firebase config", () => {
   beforeEach(() => {
     jest.resetModules();
+    jest.clearAllMocks();
     REQUIRED_KEYS.forEach((key) => delete process.env[key]);
   });
 
@@ -96,10 +120,25 @@ describe("firebase config", () => {
     REQUIRED_KEYS.forEach((key) => {
       process.env[key] = `test-${key}`;
     });
+
     const { firebaseApp, auth, db } = require("./config");
-    expect(firebaseApp).toBeDefined();
-    expect(auth).toBeDefined();
-    expect(db).toBeDefined();
+    const { initializeApp } = require("firebase/app");
+    const { initializeAuth } = require("firebase/auth");
+    const { getFirestore } = require("firebase/firestore");
+
+    expect(initializeApp).toHaveBeenCalledWith({
+      apiKey: "test-EXPO_PUBLIC_FIREBASE_API_KEY",
+      authDomain: "test-EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN",
+      projectId: "test-EXPO_PUBLIC_FIREBASE_PROJECT_ID",
+      storageBucket: "test-EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET",
+      messagingSenderId: "test-EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID",
+      appId: "test-EXPO_PUBLIC_FIREBASE_APP_ID",
+    });
+    expect(initializeAuth).toHaveBeenCalledWith(mockApp, { persistence: mockPersistence });
+    expect(getFirestore).toHaveBeenCalledWith(mockApp);
+    expect(firebaseApp).toBe(mockApp);
+    expect(auth).toBe(mockAuth);
+    expect(db).toBe(mockDb);
   });
 });
 ```
