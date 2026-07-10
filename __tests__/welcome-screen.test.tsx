@@ -64,4 +64,24 @@ describe("WelcomeScreen", () => {
     );
     expect(await findByTestId("redirect")).toBeTruthy();
   });
+
+  it("shows the error and retries bootstrap when Try again is pressed", async () => {
+    (useIdentity as unknown as jest.Mock).mockImplementation((selector: any) =>
+      selector({
+        status: "bootstrapping",
+        error: "Couldn't connect. Check your connection and try again.",
+        bootstrap: bootstrapMock,
+      })
+    );
+    const { findByText, findByTestId } = await render(
+      <ThemeProvider>
+        <WelcomeScreen />
+      </ThemeProvider>
+    );
+    expect(
+      await findByText("Couldn't connect. Check your connection and try again.")
+    ).toBeTruthy();
+    fireEvent.press(await findByTestId("retry-button"));
+    expect(bootstrapMock).toHaveBeenCalledTimes(2);
+  });
 });

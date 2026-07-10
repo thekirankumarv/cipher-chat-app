@@ -13,6 +13,7 @@ type IdentityState = {
   avatarSeed: string | null;
   draftDisplayId: string;
   draftAvatarSeed: string;
+  error: string | null;
   shuffleDraft: () => void;
   bootstrap: () => Promise<void>;
   confirmIdentity: () => Promise<void>;
@@ -25,6 +26,7 @@ export const useIdentity = create<IdentityState>((set, get) => ({
   avatarSeed: null,
   draftDisplayId: generateDisplayId(),
   draftAvatarSeed: generateAvatarSeed(),
+  error: null,
 
   shuffleDraft: () => {
     set({
@@ -34,25 +36,32 @@ export const useIdentity = create<IdentityState>((set, get) => ({
   },
 
   bootstrap: async () => {
-    let user: User | null = auth.currentUser;
-    if (!user) {
-      const credential = await signInAnonymously(auth);
-      user = credential.user;
-    }
+    set({ error: null });
+    try {
+      let user: User | null = auth.currentUser;
+      if (!user) {
+        const credential = await signInAnonymously(auth);
+        user = credential.user;
+      }
 
-    const userDocRef = doc(db, "users", user.uid);
-    const userDocSnap = await getDoc(userDocRef);
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
 
-    if (userDocSnap.exists()) {
-      const data = userDocSnap.data() as { displayId: string; avatarSeed: string };
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data() as { displayId: string; avatarSeed: string };
+        set({
+          status: "ready",
+          uid: user.uid,
+          displayId: data.displayId,
+          avatarSeed: data.avatarSeed,
+        });
+      } else {
+        set({ status: "needs-identity", uid: user.uid });
+      }
+    } catch (err) {
       set({
-        status: "ready",
-        uid: user.uid,
-        displayId: data.displayId,
-        avatarSeed: data.avatarSeed,
+        error: err instanceof Error ? err.message : "Couldn't connect. Check your connection and try again.",
       });
-    } else {
-      set({ status: "needs-identity", uid: user.uid });
     }
   },
 
@@ -61,18 +70,26 @@ export const useIdentity = create<IdentityState>((set, get) => ({
     if (!uid) {
       throw new Error("confirmIdentity called before bootstrap resolved a uid");
     }
-    const userDocRef = doc(db, "users", uid);
-    await setDoc(userDocRef, {
-      displayId: draftDisplayId,
-      avatarSeed: draftAvatarSeed,
-      createdAt: serverTimestamp(),
-      lastSeen: serverTimestamp(),
-      online: true,
-    });
-    set({
-      status: "ready",
-      displayId: draftDisplayId,
-      avatarSeed: draftAvatarSeed,
-    });
+    set({ error: null });
+    try {
+      const userDocRef = doc(db, "users", uid);
+      await setDoc(userDocRef, {
+        displayId: draftDisplayId,
+        avatarSeed: draftAvatarSeed,
+        createdAt: serverTimestamp(),
+        lastSeen: serverTimestamp(),
+        online: true,
+      });
+      set({
+        status: "ready",
+        displayId: draftDisplayId,
+        avatarSeed: draftAvatarSeed,
+      });
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : "Couldn't save your identity. Try again.",
+      });
+      throw err;
+    }
   },
 }));

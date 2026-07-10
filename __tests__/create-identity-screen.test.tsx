@@ -63,4 +63,16 @@ describe("CreateIdentityScreen", () => {
     await waitFor(() => expect(confirmIdentityMock).toHaveBeenCalledTimes(1));
     expect(mockReplace).toHaveBeenCalledWith("/home");
   });
+
+  it("shows an error and does not navigate when confirmIdentity rejects", async () => {
+    confirmIdentityMock.mockRejectedValue(new Error("write denied"));
+    const { findByTestId, findByText } = await render(
+      <ThemeProvider>
+        <CreateIdentityScreen />
+      </ThemeProvider>
+    );
+    fireEvent.press(await findByTestId("continue-button"));
+    expect(await findByText("write denied")).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
 });

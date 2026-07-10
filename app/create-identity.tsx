@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "../lib/theme/ThemeProvider";
@@ -12,10 +13,16 @@ export default function CreateIdentityScreen() {
   const draftAvatarSeed = useIdentity((state) => state.draftAvatarSeed);
   const shuffleDraft = useIdentity((state) => state.shuffleDraft);
   const confirmIdentity = useIdentity((state) => state.confirmIdentity);
+  const [continueError, setContinueError] = useState<string | null>(null);
 
   const handleContinue = async () => {
-    await confirmIdentity();
-    router.replace("/home");
+    setContinueError(null);
+    try {
+      await confirmIdentity();
+      router.replace("/home");
+    } catch (err) {
+      setContinueError(err instanceof Error ? err.message : "Couldn't save your identity. Try again.");
+    }
   };
 
   return (
@@ -65,6 +72,19 @@ export default function CreateIdentityScreen() {
       >
         <Text style={{ color: colors.accentInk, fontWeight: "700" }}>Continue</Text>
       </Pressable>
+      {continueError ? (
+        <Text
+          testID="continue-error"
+          style={{
+            color: colors.danger,
+            fontSize: typeScale.meta.fontSize,
+            marginTop: spacing.md,
+            textAlign: "center",
+          }}
+        >
+          {continueError}
+        </Text>
+      ) : null}
     </View>
   );
 }

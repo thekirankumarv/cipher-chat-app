@@ -30,6 +30,7 @@ describe("useIdentity", () => {
       avatarSeed: null,
       draftDisplayId: "quiet-falcon-42",
       draftAvatarSeed: "seedseedseed1234",
+      error: null,
     });
   });
 
@@ -94,5 +95,41 @@ describe("useIdentity", () => {
     await expect(useIdentity.getState().confirmIdentity()).rejects.toThrow(
       "confirmIdentity called before bootstrap resolved a uid"
     );
+  });
+
+  it("bootstrap catches a signInAnonymously failure and sets an error instead of throwing", async () => {
+    (signInAnonymously as jest.Mock).mockRejectedValue(new Error("network unreachable"));
+
+    await act(async () => {
+      await useIdentity.getState().bootstrap();
+    });
+
+    const state = useIdentity.getState();
+    expect(state.status).toBe("bootstrapping");
+    expect(state.error).toBe("network unreachable");
+  });
+
+  it("bootstrap catches a getDoc failure and sets an error instead of throwing", async () => {
+    (signInAnonymously as jest.Mock).mockResolvedValue({ user: { uid: "uid-4" } });
+    (getDoc as jest.Mock).mockRejectedValue(new Error("firestore unreachable"));
+
+    await act(async () => {
+      await useIdentity.getState().bootstrap();
+    });
+
+    const state = useIdentity.getState();
+    expect(state.status).toBe("bootstrapping");
+    expect(state.error).toBe("firestore unreachable");
+  });
+
+  it("confirmIdentity catches a setDoc failure, sets an error, and rethrows", async () => {
+    useIdentity.setState({ uid: "uid-5" });
+    (setDoc as jest.Mock).mockRejectedValue(new Error("write denied"));
+
+    await expect(useIdentity.getState().confirmIdentity()).rejects.toThrow("write denied");
+
+    const state = useIdentity.getState();
+    expect(state.status).toBe("bootstrapping");
+    expect(state.error).toBe("write denied");
   });
 });

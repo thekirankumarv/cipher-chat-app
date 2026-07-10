@@ -9,6 +9,7 @@ export default function WelcomeScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const status = useIdentity((state) => state.status);
+  const error = useIdentity((state) => state.error);
   const bootstrap = useIdentity((state) => state.bootstrap);
 
   useEffect(() => {
@@ -17,6 +18,43 @@ export default function WelcomeScreen() {
 
   if (status === "ready") {
     return <Redirect href="/home" />;
+  }
+
+  if (error) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: colors.background,
+          padding: spacing.lg,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.text,
+            fontSize: typeScale.message.fontSize,
+            textAlign: "center",
+            marginBottom: spacing.lg,
+          }}
+        >
+          {error}
+        </Text>
+        <Pressable
+          testID="retry-button"
+          onPress={() => bootstrap()}
+          style={{
+            backgroundColor: colors.accent,
+            borderRadius: radii.button,
+            paddingVertical: spacing.md,
+            paddingHorizontal: spacing.xxl,
+          }}
+        >
+          <Text style={{ color: colors.accentInk, fontWeight: "700" }}>Try again</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   if (status === "needs-identity") {
