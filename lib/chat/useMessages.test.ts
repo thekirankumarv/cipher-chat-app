@@ -135,10 +135,11 @@ describe("useMessages", () => {
     expect(payload).toEqual({ deleted: true, text: "", mediaUrl: null, mediaName: null });
   });
 
-  it("markRead resets the unread count for the given uid", async () => {
+  it("markRead resets the unread count and stamps lastRead for the given uid", async () => {
     await useMessages.getState().markRead("chat-1", "my-uid");
     expect(updateDoc).toHaveBeenCalledTimes(1);
     const [, payload] = (updateDoc as jest.Mock).mock.calls[0];
     expect(payload["unreadCount.my-uid"]).toBe(0);
+    expect(payload["lastRead.my-uid"]).toBe("mock-timestamp");
   });
 });

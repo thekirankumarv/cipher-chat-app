@@ -11,6 +11,7 @@ import {
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { ThemeProvider } from "../lib/theme/ThemeProvider";
 import { useIdentity } from "../lib/identity/useIdentity";
+import { usePresence } from "../lib/presence/usePresence";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,6 +23,7 @@ export default function RootLayout() {
     PlusJakartaSans_800ExtraBold,
   });
   const bootstrap = useIdentity((s) => s.bootstrap);
+  const uid = useIdentity((s) => s.uid);
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -35,6 +37,8 @@ export default function RootLayout() {
   useEffect(() => {
     bootstrap();
   }, [bootstrap]);
+
+  usePresence(uid);
 
   if (!fontsLoaded) {
     return null;

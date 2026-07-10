@@ -18,8 +18,10 @@ jest.mock("firebase/firestore", () => ({
       data: () => ({ displayId: `friend-${ref.id}`, avatarSeed: `seed-${ref.id}` }),
     }),
   ),
+  updateDoc: jest.fn().mockResolvedValue(undefined),
 }));
 
+import { updateDoc } from "firebase/firestore";
 import { useChats } from "./useChats";
 
 function fakeSnap(docs: Array<{ id: string; data: Record<string, unknown> }>) {
@@ -54,6 +56,8 @@ describe("useChats", () => {
               lastMessage: "yo",
               lastMessageAt: { toMillis: () => 2000 },
               unreadCount: { "my-uid": 0, "other-2": 0 },
+              typing: { "other-2": true },
+              lastRead: { "other-2": { toMillis: () => 1500 } },
             },
           },
         ]),
@@ -64,7 +68,16 @@ describe("useChats", () => {
     expect(loading).toBe(false);
     expect(chats.map((c) => c.id)).toEqual(["chat-b", "chat-a"]);
     expect(chats[0].otherDisplayId).toBe("friend-other-2");
+    expect(chats[0].otherTyping).toBe(true);
+    expect(chats[0].otherLastRead).toBe(1500);
     expect(chats[1].unreadCount).toBe(2);
+    expect(chats[1].otherTyping).toBe(false);
+    expect(chats[1].otherLastRead).toBeNull();
     unsubscribe();
+  });
+
+  it("setTyping updates the chat doc's typing map for the given uid", async () => {
+    await useChats.getState().setTyping("chat-1", "my-uid", true);
+    expect(updateDoc).toHaveBeenCalledWith({ id: "chat-1", col: "chats" }, { "typing.my-uid": true });
   });
 });

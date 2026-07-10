@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase/config";
 
 export type ChatSummary = {
@@ -10,6 +10,8 @@ export type ChatSummary = {
   lastMessage: string;
   lastMessageAt: number | null;
   unreadCount: number;
+  otherTyping: boolean;
+  otherLastRead: number | null;
 };
 
 type RawChat = {
@@ -17,12 +19,15 @@ type RawChat = {
   lastMessage: string;
   lastMessageAt: { toMillis: () => number } | null;
   unreadCount: Record<string, number>;
+  typing?: Record<string, boolean>;
+  lastRead?: Record<string, { toMillis: () => number }>;
 };
 
 type ChatsState = {
   chats: ChatSummary[];
   loading: boolean;
   subscribe: (uid: string) => () => void;
+  setTyping: (chatId: string, uid: string, isTyping: boolean) => Promise<void>;
 };
 
 const userCache = new Map<string, { displayId: string; avatarSeed: string }>();
@@ -60,6 +65,8 @@ export const useChats = create<ChatsState>(() => ({
             lastMessage: chat.lastMessage,
             lastMessageAt: chat.lastMessageAt ? chat.lastMessageAt.toMillis() : null,
             unreadCount: chat.unreadCount?.[uid] ?? 0,
+            otherTyping: chat.typing?.[otherUid] ?? false,
+            otherLastRead: chat.lastRead?.[otherUid] ? chat.lastRead[otherUid].toMillis() : null,
           };
         }),
       );
@@ -67,5 +74,9 @@ export const useChats = create<ChatsState>(() => ({
       useChats.setState({ chats: resolved, loading: false });
     });
     return unsubscribe;
+  },
+
+  setTyping: async (chatId, uid, isTyping) => {
+    await updateDoc(doc(db, "chats", chatId), { [`typing.${uid}`]: isTyping }).catch(() => {});
   },
 }));

@@ -35,6 +35,13 @@ jest.mock("../lib/media/pickMedia", () => ({
 const mockUploadMedia = jest.fn();
 jest.mock("../lib/media/uploadMedia", () => ({ uploadMedia: (...args: any[]) => mockUploadMedia(...args) }));
 
+const mockSetTyping = jest.fn().mockResolvedValue(undefined);
+const mockPresenceSubscribe = jest.fn(() => jest.fn());
+jest.mock("../lib/presence/useUserPresence", () => ({
+  useUserPresence: jest.fn((selector: any) => selector({ byUid: {}, subscribe: mockPresenceSubscribe })),
+  formatLastSeen: () => "Offline",
+}));
+
 (globalThis as any).fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve("fake-blob") });
 
 import ChatScreen from "../app/chat/[id]";
@@ -48,9 +55,13 @@ describe("ChatScreen", () => {
     (useChats as unknown as jest.Mock).mockImplementation((selector: any) =>
       selector({
         chats: [
-          { id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1" },
+          {
+            id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1",
+            otherTyping: false, otherLastRead: null,
+          },
         ],
         subscribe: mockChatsSubscribe,
+        setTyping: mockSetTyping,
       }),
     );
     (useMessages as unknown as jest.Mock).mockImplementation((selector: any) =>
@@ -270,5 +281,64 @@ describe("ChatScreen", () => {
     );
     expect(await findByText("This message was deleted")).toBeTruthy();
     expect(queryByTestId("action-delete-m3")).toBeNull();
+  });
+
+  it("shows typing… in the header when the other participant is typing", async () => {
+    (useChats as unknown as jest.Mock).mockImplementation((selector: any) =>
+      selector({
+        chats: [
+          {
+            id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1",
+            otherTyping: true, otherLastRead: null,
+          },
+        ],
+        subscribe: mockChatsSubscribe,
+        setTyping: mockSetTyping,
+      }),
+    );
+    const { findByText } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    expect(await findByText("typing…")).toBeTruthy();
+  });
+
+  it("marks typing true on input change and clears it on send", async () => {
+    jest.useFakeTimers();
+    const { findByTestId } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    const input = await findByTestId("message-input");
+    fireEvent.changeText(input, "hi");
+    expect(mockSetTyping).toHaveBeenCalledWith("chat-1", "my-uid", true);
+
+    fireEvent.press(await findByTestId("send-button"));
+    await waitFor(() => expect(mockSetTyping).toHaveBeenCalledWith("chat-1", "my-uid", false));
+    jest.useRealTimers();
+  });
+
+  it("shows Read on my last message once the other participant's lastRead catches up", async () => {
+    (useChats as unknown as jest.Mock).mockImplementation((selector: any) =>
+      selector({
+        chats: [
+          {
+            id: "chat-1", otherUid: "other-uid", otherDisplayId: "swift-otter-42", otherAvatarSeed: "seed-1",
+            otherTyping: false, otherLastRead: 5000,
+          },
+        ],
+        subscribe: mockChatsSubscribe,
+        setTyping: mockSetTyping,
+      }),
+    );
+    const { findByTestId, findByText } = await render(
+      <ThemeProvider>
+        <ChatScreen />
+      </ThemeProvider>
+    );
+    expect(await findByTestId("read-status-m2")).toBeTruthy();
+    expect(await findByText("Read")).toBeTruthy();
   });
 });

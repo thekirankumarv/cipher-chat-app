@@ -17,6 +17,7 @@ import { spacing, radii, typeScale } from "../../lib/theme/tokens";
 import { useIdentity } from "../../lib/identity/useIdentity";
 import { useChats } from "../../lib/chat/useChats";
 import { useMessages, type Message, type ReplyPreview } from "../../lib/chat/useMessages";
+import { useUserPresence, formatLastSeen } from "../../lib/presence/useUserPresence";
 import { Avatar } from "../../components/Avatar";
 import { pickImageOrVideo, pickFile } from "../../lib/media/pickMedia";
 import { uploadMedia } from "../../lib/media/uploadMedia";
@@ -43,6 +44,9 @@ export default function ChatScreen() {
   const uid = useIdentity((s) => s.uid);
   const chatMeta = useChats((s) => s.chats.find((c) => c.id === id));
   const chatsSubscribe = useChats((s) => s.subscribe);
+  const setTyping = useChats((s) => s.setTyping);
+  const presenceByUid = useUserPresence((s) => s.byUid);
+  const presenceSubscribe = useUserPresence((s) => s.subscribe);
   const messages = useMessages((s) => s.messages);
   const subscribe = useMessages((s) => s.subscribe);
   const sendMessage = useMessages((s) => s.sendMessage);
@@ -58,6 +62,7 @@ export default function ChatScreen() {
   const [replyTarget, setReplyTarget] = useState<ReplyPreview | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
+  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -79,8 +84,34 @@ export default function ChatScreen() {
     if (uid && id) markRead(id, uid);
   }, [uid, id, messages.length, markRead]);
 
+  useEffect(() => {
+    if (!chatMeta?.otherUid) return;
+    const unsubscribe = presenceSubscribe(chatMeta.otherUid);
+    return unsubscribe;
+  }, [chatMeta?.otherUid, presenceSubscribe]);
+
+  // Clear the typing flag on unmount (leaving the chat) so it doesn't stick
+  // on for the other participant if the tab closes mid-timeout.
+  useEffect(() => {
+    return () => {
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      if (uid && id) setTyping(id, uid, false);
+    };
+  }, [uid, id, setTyping]);
+
+  const handleDraftChange = (text: string) => {
+    setDraft(text);
+    if (!uid || !id || editingId) return;
+    setTyping(id, uid, true);
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => setTyping(id, uid, false), 2000);
+  };
+
   const handleSend = () => {
     if (!uid || !id || !chatMeta || !draft.trim()) return;
+
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    setTyping(id, uid, false);
 
     if (editingId) {
       const text = draft;
@@ -152,6 +183,8 @@ export default function ChatScreen() {
     await deleteMessage(id, item.id);
   };
 
+  const lastMineMessage = [...messages].reverse().find((m) => m.senderId === uid && !m.deleted);
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -170,16 +203,26 @@ export default function ChatScreen() {
           <Text style={{ color: colors.accent, fontSize: typeScale.header.fontSize }}>‹</Text>
         </Pressable>
         {chatMeta ? <Avatar seed={chatMeta.otherAvatarSeed} size={36} /> : null}
-        <Text
-          style={{
-            color: colors.text,
-            fontSize: typeScale.chatName.fontSize,
-            fontWeight: typeScale.chatName.fontWeight,
-            marginLeft: spacing.sm,
-          }}
-        >
-          {chatMeta?.otherDisplayId ?? "Chat"}
-        </Text>
+        <View style={{ marginLeft: spacing.sm }}>
+          <Text
+            style={{
+              color: colors.text,
+              fontSize: typeScale.chatName.fontSize,
+              fontWeight: typeScale.chatName.fontWeight,
+            }}
+          >
+            {chatMeta?.otherDisplayId ?? "Chat"}
+          </Text>
+          <Text testID="presence-status" style={{ color: colors.textSecondary, fontSize: typeScale.meta.fontSize }}>
+            {chatMeta?.otherTyping
+              ? "typing…"
+              : chatMeta?.otherUid && presenceByUid[chatMeta.otherUid]?.online
+                ? "Online"
+                : chatMeta?.otherUid
+                  ? formatLastSeen(presenceByUid[chatMeta.otherUid]?.lastSeen ?? null)
+                  : ""}
+          </Text>
+        </View>
       </View>
 
       <FlatList
@@ -191,6 +234,26 @@ export default function ChatScreen() {
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         renderItem={({ item }) => {
           const mine = item.senderId === uid;
+          const isLastOfMine = mine && item.id === lastMineMessage?.id;
+          const readStatus =
+            isLastOfMine && item.createdAt
+              ? chatMeta?.otherLastRead && chatMeta.otherLastRead >= item.createdAt
+                ? "Read"
+                : "Delivered"
+              : null;
+          const statusLine = readStatus ? (
+            <Text
+              testID={`read-status-${item.id}`}
+              style={{
+                color: colors.textTertiary,
+                fontSize: 11,
+                alignSelf: "flex-end",
+                marginBottom: spacing.sm,
+              }}
+            >
+              {readStatus}
+            </Text>
+          ) : null;
           const bubbleStyle = {
             alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
             backgroundColor: mine ? colors.accent : colors.surface,
@@ -288,6 +351,7 @@ export default function ChatScreen() {
                     </Pressable>
                   </View>
                 ) : null}
+                {statusLine}
                 {actionRow}
               </View>
             );
@@ -320,6 +384,7 @@ export default function ChatScreen() {
                     </Pressable>
                   </View>
                 ) : null}
+                {statusLine}
                 {actionRow}
               </View>
             );
@@ -341,6 +406,7 @@ export default function ChatScreen() {
                   </Text>
                 ) : null}
               </Pressable>
+              {statusLine}
               {actionRow}
             </View>
           );
@@ -425,7 +491,7 @@ export default function ChatScreen() {
         <TextInput
           testID="message-input"
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={handleDraftChange}
           placeholder="Message"
           placeholderTextColor={colors.textTertiary}
           style={{

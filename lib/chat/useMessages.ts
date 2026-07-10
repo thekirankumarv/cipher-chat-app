@@ -168,6 +168,7 @@ export const useMessages = create<MessagesState>(() => ({
   markRead: async (chatId, uid) => {
     await updateDoc(doc(db, "chats", chatId), {
       [`unreadCount.${uid}`]: 0,
+      [`lastRead.${uid}`]: serverTimestamp(),
     });
   },
 }));
