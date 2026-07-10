@@ -47,8 +47,16 @@ describe("useMessages", () => {
     const { messages, loading } = useMessages.getState();
     expect(loading).toBe(false);
     expect(messages).toEqual([
-      { id: "m1", senderId: "a", type: "text", text: "hi", createdAt: 1000, mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined },
-      { id: "m2", senderId: "b", type: "text", text: "yo", createdAt: 2000, mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined },
+      {
+        id: "m1", senderId: "a", type: "text", text: "hi", createdAt: 1000,
+        mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined,
+        edited: undefined, deleted: undefined, replyTo: undefined,
+      },
+      {
+        id: "m2", senderId: "b", type: "text", text: "yo", createdAt: 2000,
+        mediaUrl: undefined, mediaName: undefined, mediaSize: undefined, mediaMime: undefined,
+        edited: undefined, deleted: undefined, replyTo: undefined,
+      },
     ]);
     unsubscribe();
   });
@@ -96,6 +104,35 @@ describe("useMessages", () => {
 
     const [, updatePayload] = (updateDoc as jest.Mock).mock.calls[0];
     expect(updatePayload.lastMessage).toBe("Photo");
+  });
+
+  it("sendMessage includes replyTo when replying", async () => {
+    await useMessages.getState().sendMessage("chat-1", "my-uid", "other-uid", "sure", {
+      messageId: "m1",
+      senderId: "other-uid",
+      preview: "original text",
+    });
+    const [, payload] = (addDoc as jest.Mock).mock.calls[0];
+    expect(payload.replyTo).toEqual({ messageId: "m1", senderId: "other-uid", preview: "original text" });
+  });
+
+  it("editMessage updates the text and sets edited", async () => {
+    await useMessages.getState().editMessage("chat-1", "m1", "  updated text  ");
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const [, payload] = (updateDoc as jest.Mock).mock.calls[0];
+    expect(payload).toEqual({ text: "updated text", edited: true });
+  });
+
+  it("editMessage does nothing for blank text", async () => {
+    await useMessages.getState().editMessage("chat-1", "m1", "   ");
+    expect(updateDoc).not.toHaveBeenCalled();
+  });
+
+  it("deleteMessage soft-deletes: clears text/media and sets deleted", async () => {
+    await useMessages.getState().deleteMessage("chat-1", "m1");
+    expect(updateDoc).toHaveBeenCalledTimes(1);
+    const [, payload] = (updateDoc as jest.Mock).mock.calls[0];
+    expect(payload).toEqual({ deleted: true, text: "", mediaUrl: null, mediaName: null });
   });
 
   it("markRead resets the unread count for the given uid", async () => {
