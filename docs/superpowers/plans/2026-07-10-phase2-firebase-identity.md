@@ -532,9 +532,12 @@ Expected: both print `19.2.3`.
 - [ ] **Step 2: Write the failing test**
 
 Write `components/Avatar.test.tsx`:
+`react-native-svg`'s `Path` component runs `fill` through React Native's own `processColor` before exposing it as a rendered prop (its `extractBrush` internals wrap it as `{ type: 0, payload: <packed ARGB int> }`), so the test compares against that processed form via the same `processColor` function rather than the raw CSS string — this still ties the assertion back to `expected.fillColor`, it just accounts for the real library's real behavior instead of mocking it away.
+
 ```tsx
 import React from "react";
 import { render } from "@testing-library/react-native";
+import { processColor } from "react-native";
 import { generateBlob } from "../lib/avatar/generateBlob";
 import { Avatar } from "./Avatar";
 
@@ -545,7 +548,10 @@ describe("Avatar", () => {
     const { findByTestId } = await render(<Avatar seed={seed} />);
     const path = await findByTestId("avatar-path");
     expect(path.props.d).toBe(expected.pathD);
-    expect(path.props.fill).toBe(expected.fillColor);
+    expect(path.props.fill).toEqual({
+      type: 0,
+      payload: processColor(expected.fillColor),
+    });
   });
 });
 ```
